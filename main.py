@@ -324,13 +324,31 @@ with st.container(border=True):
 
     with tab1:
         # Daily breakdown
-        daily_fig = px.bar(
-            df,
-            x="date",
-            y=df["seconds"] / 60,  # Convert to minutes for display
-            title="Daily Minutes Watched",
-            labels={"value": "Minutes", "date": "Date"},
+        daily_fig = go.Figure()
+
+        daily_fig.add_trace(
+            go.Bar(
+                x=df["date"],
+                y=df["seconds"] / 60,  # Convert to minutes
+                name="Daily Minutes",
+            )
         )
+
+        daily_fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=[avg_seconds_per_day / 60] * len(df),  # Convert to minutes
+                name="Overall Average",
+                line=dict(color=COLOUR_PALETTE["primary"], dash="dash"),
+            )
+        )
+
+        daily_fig.update_layout(
+            title="Daily Minutes Watched",
+            xaxis_title="Date",
+            yaxis_title="Minutes",
+        )
+
         daily_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
         st.plotly_chart(daily_fig, use_container_width=True)
 
