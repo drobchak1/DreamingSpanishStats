@@ -84,6 +84,9 @@ def load_data(token: str) -> AnalysisResult | None:
     df = pd.DataFrame(api_data)
     df["date"] = pd.to_datetime(df["date"])
 
+    # Drop UserId (unnecessary for our case)
+    df = df.drop(columns=["userId"])
+
     # Create a complete date range
     df = df.set_index("date").asfreq("D").reset_index()
     df = df.rename(columns={"index": "date"})
