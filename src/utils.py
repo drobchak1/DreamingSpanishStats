@@ -1,32 +1,34 @@
-"""
-Provides utility functions for managing and analyzing viewing progress data.
-Includes methods for data processing, statistical insights, and forecasting future learning milestones
+"""Provide utility functions for managing and analyzing viewing progress data.
+
+Includes methods for data processing, statistical insights, and forecasting future
+learning milestones.
 """
 
 from datetime import timedelta
 
 import pandas as pd
-import requests
+import httpx
 import streamlit as st
 
 from src.model import AnalysisResult
 
 
 def fetch_ds_data(token: str) -> dict | None:
-    """
-    Fetches data from the Dreaming Spanish API using the provided bearer token.
+    """Fetch data from the Dreaming Spanish API using the provided bearer token.
 
     Args:
         token (str): The bearer token for API authentication.
 
     Returns:
-        dict or None: A dictionary containing the fetched data if successful, otherwise None.
+        dict or None: A dictionary containing the fetched data if successful,
+                      otherwise None.
+
     """
     url = "https://www.dreamingspanish.com/.netlify/functions/dayWatchedTime"
     headers = {"Authorization": f"Bearer {token}"}
 
     try:
-        response = requests.get(url, headers=headers)
+        response = httpx.get(url, headers=headers)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -50,7 +52,7 @@ def get_initial_time(token: str) -> int | None:
     headers = {"Authorization": f"Bearer {token}"}
 
     try:
-        response = requests.get(url, headers=headers)
+        response = httpx.get(url, headers=headers)
         response.raise_for_status()
 
         return response.json()["externalTimes"][0]["timeSeconds"]
@@ -105,13 +107,15 @@ def load_data(token: str) -> AnalysisResult | None:
 
     # Calculate current goal streak
     df["goal_streak_group"] = (~df["goalReached"]).cumsum()
-    df["current_goal_streak"] = df.groupby("goal_streak_group")["goalReached"].cumsum()
+    df["current_goal_streak"] = df.groupby("goal_streak_group")[
+        "goalReached"].cumsum()
     current_goal_streak = (
         df["current_goal_streak"].iloc[-1] if df["goalReached"].iloc[-1] else 0
     )
 
     # Calculate longest goal streak
-    goal_streak_lengths = df[df["goalReached"]].groupby("goal_streak_group").size()
+    goal_streak_lengths = df[df["goalReached"]
+                             ].groupby("goal_streak_group").size()
     longest_goal_streak = (
         goal_streak_lengths.max() if not goal_streak_lengths.empty else 0
     )
@@ -163,7 +167,8 @@ def generate_future_predictions(
     future_df = pd.DataFrame({"date": future_dates, "seconds": future_seconds})
 
     # Calculate cumulative values
-    future_df["cumulative_seconds"] = future_seconds.cumsum() + last_cumulative_seconds
+    future_df["cumulative_seconds"] = future_seconds.cumsum() + \
+        last_cumulative_seconds
     future_df["cumulative_minutes"] = future_df["cumulative_seconds"] / 60
     future_df["cumulative_hours"] = future_df["cumulative_minutes"] / 60
 
