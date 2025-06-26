@@ -10,7 +10,7 @@ This application provides an interactive interface to:
 - Export viewing data to CSV format
 """
 
-from datetime import timedelta
+from datetime import timedelta, date
 
 import pandas as pd
 import plotly.express as px
@@ -111,14 +111,7 @@ total_days = result.total_days
 current_goal_streak = result.current_goal_streak
 longest_goal_streak = result.longest_goal_streak
 
-# Just rename the column instead of recreating the DataFrame
-df = df.rename(columns={"timeSeconds": "seconds"})
-
-# Calculate cumulative seconds and streak
-seconds = df["seconds"].tolist()
-dates = df["date"].dt.strftime("%Y/%m/%d").tolist()
-
-df = pd.DataFrame({"date": pd.to_datetime(dates), "seconds": seconds})
+df = result.df.rename(columns={"timeSeconds": "seconds"})
 
 # Calculate cumulative seconds and streak
 df["cumulative_seconds"] = df["seconds"].cumsum() + initial_time
@@ -324,8 +317,8 @@ with st.container(border=True):
 
 with st.container(border=True):
     st.subheader("Additional Graphs")
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["Daily Breakdown", "Moving Averages", "Yearly Heatmap", "Days of Week"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["Daily Breakdown", "Moving Averages", "Yearly Heatmap", "Monthly Breakdown", "Days of Week"])
 
     with tab1:
         # Daily breakdown
@@ -493,7 +486,73 @@ with st.container(border=True):
         st.plotly_chart(heatmap_fig, use_container_width=True)
 
     with tab4:
-        # Days of week breakdown
+        # Monthly breakdown
+        df["month_year"] = df["date"].dt.to_period("M")
+
+        last_12_months = sorted(
+            df["month_year"].unique(), reverse=True)[:12][::-1]
+
+        monthly_data = []
+        today = date.today()
+
+        for month_period in last_12_months:
+            month_df = df[df["month_year"] == month_period]
+
+            days_practiced = month_df[month_df["seconds"]
+                                      > 0]["date"].nunique()
+            days_target_met = month_df["goalReached"].sum()
+
+            if month_period.year == today.year and month_period.month == today.month:
+                days_in_month = month_df["date"].nunique()
+            else:
+                days_in_month = month_period.days_in_month
+
+            monthly_data.append({
+                "month": month_period.strftime("%Y-%m"),
+                "days_practiced": days_practiced,
+                "days_target_met": days_target_met,
+                "days_in_month": days_in_month,
+            })
+
+        monthly_df = pd.DataFrame(monthly_data)
+
+        # Create grouped bar chart
+        monthly_fig = go.Figure()
+
+        monthly_fig.add_trace(go.Bar(
+            x=monthly_df["month"],
+            y=monthly_df["days_target_met"],
+            name="Days Target Met",
+            marker_color=COLOUR_PALETTE["7day_avg"]
+        ))
+
+        monthly_fig.add_trace(go.Bar(
+            x=monthly_df["month"],
+            y=monthly_df["days_practiced"],
+            name="Days Practiced (> 0 mins)",
+            marker_color=COLOUR_PALETTE["primary"]
+        ))
+
+        monthly_fig.add_trace(go.Bar(
+            x=monthly_df["month"],
+            y=monthly_df["days_in_month"],
+            name="Tracked Days in Month",
+            marker_color=COLOUR_PALETTE["30day_avg"]
+        ))
+
+        monthly_fig.update_layout(
+            barmode="group",
+            title="Monthly Breakdown of Practice and Goals",
+            xaxis_title="Month",
+            yaxis_title="Number of Days",
+            height=500,
+            legend_title="Metric"
+        )
+
+        st.plotly_chart(monthly_fig, use_container_width=True)
+
+    with tab5:
+     # Days of week breakdown
         df["day_of_week"] = df["date"].dt.day_name()
         daily_avg_df = (
             df.groupby("day_of_week")["seconds"]
@@ -676,7 +735,7 @@ with st.container(border=True):
     result = st.session_state.data
     st.download_button(
         label="📥 Export Data to CSV",
-        data=result.df.to_csv(index=False),
+        data=df.to_csv(index=False),
         file_name="dreaming_spanish_data.csv",
         mime="text/csv",
     )
