@@ -98,7 +98,7 @@ if "data" not in st.session_state or go_button:
         data = load_data(token)
         if data is None:
             st.error(
-                "Failed to fetch data from the DreamingSpnaish API. Please check your bearer token, ensuring it doesn't contain anything extra such as 'token:' at the beginning."
+                "Failed to fetch data from the DreamingSpanish API. Please check your bearer token, ensuring it doesn't contain anything extra such as 'token:' at the beginning."
             )
             st.stop()
         st.session_state.data = data
