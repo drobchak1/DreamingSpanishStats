@@ -601,7 +601,7 @@ with st.container(border=True):
                 st.progress(percentage / 100)
 
 with st.container(border=True):
-    st.subheader("Additional Insights")
+    st.subheader("Insights")
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -672,7 +672,7 @@ with st.container(border=True):
 
 
 with st.container(border=True):
-    st.subheader("Additional Tools")
+    st.subheader("Tools")
     result = st.session_state.data
     st.download_button(
         label="📥 Export Data to CSV",
