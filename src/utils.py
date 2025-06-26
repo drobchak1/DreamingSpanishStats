@@ -6,8 +6,8 @@ learning milestones.
 
 from datetime import timedelta
 
-import pandas as pd
 import httpx
+import pandas as pd
 import streamlit as st
 
 from src.model import AnalysisResult
@@ -31,22 +31,25 @@ def fetch_ds_data(token: str) -> dict | None:
         response = httpx.get(url, headers=headers)
         response.raise_for_status()
         return response.json()
-    except Exception as e:
-        st.error(f"Error fetching data: {str(e)}")
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Error fetching data: {e!s}")
         return None
 
 
 def get_initial_time(token: str) -> int | None:
-    """
-    Fetches the initial time watched from the Dreaming Spanish API using the provided bearer token.
+    """Fetch the initial time watched from the Dreaming Spanish API.
 
-    This function uses the API call to fetch the "external times", this includes the time watched before the user started Dreaming Spanish. Which is acquired in the users onboarding.
+    This function uses the API call to fetch the "external times" using a bearer token.
+    This data includes the time watched before the user started Dreaming Spanish,
+    which is acquired in the users onboarding.
 
     Args:
         token (str): The bearer token for API authentication.
 
     Returns:
-        int or None: The initial time watched (in seconds) if successful, otherwise None.
+        int or None: The initial time watched (in seconds) if successful,
+                     otherwise None.
+
     """
     url = "https://www.dreamingspanish.com/.netlify/functions/externalTime"
     headers = {"Authorization": f"Bearer {token}"}
@@ -56,24 +59,26 @@ def get_initial_time(token: str) -> int | None:
         response.raise_for_status()
 
         return response.json()["externalTimes"][0]["timeSeconds"]
-    except Exception as e:
-        st.error(f"Error fetching initial time: {str(e)}")
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Error fetching initial time: {e!s}")
         return None
 
 
 def load_data(token: str) -> AnalysisResult | None:
-    """
-    Loads and processes data from the Dreaming Spanish API.
+    """Load and processes data from the Dreaming Spanish API.
 
-    This function fetches data using the provided bearer token, converts the data into a DataFrame,
-    and processes it to include goal tracking metrics such as total days, goals reached, current goal streak,
-    and longest goal streak.
+    This function fetches data using the provided bearer token,
+    converts the data into a DataFrame, and processes it to include goal tracking
+    metrics such as total days, goals reached, current goal streak, and longest
+    goal streak.
 
     Args:
         token (str): The bearer token for API authentication.
 
     Returns:
-        AnalysisResult or None: An AnalysisResult object containing the processed data if successful, otherwise None.
+        AnalysisResult or None: An AnalysisResult object containing the processed data
+                                if successful, otherwise None.
+
     """
     if not token or not token.strip():
         return None
@@ -95,7 +100,7 @@ def load_data(token: str) -> AnalysisResult | None:
 
     # Fill missing values with explicit types
     df = df.astype({"timeSeconds": "float64", "goalReached": "boolean"}).fillna(
-        {"timeSeconds": 0.0, "goalReached": False}
+        {"timeSeconds": 0.0, "goalReached": False},
     )
 
     # Sort by date
@@ -130,11 +135,12 @@ def load_data(token: str) -> AnalysisResult | None:
 
 
 def generate_future_predictions(
-    df: pd.DataFrame, avg_seconds_per_day: float, target_hours: float
-):
-    """
-    Generates future predictions based on historical data and a given average seconds per day,
-    stopping when the target hours are reached.
+    df: pd.DataFrame, avg_seconds_per_day: float, target_hours: float,
+) -> pd.DataFrame:
+    """Generate future predictions based on historical data.
+
+    Generate future predictions based on historical data and on
+    a given average seconds per day, stopping when the target hours are reached.
 
     Args:
         df (pd.DataFrame): The existing DataFrame containing historical data.
@@ -142,7 +148,9 @@ def generate_future_predictions(
         target_hours (float): The target number of hours to predict up to.
 
     Returns:
-        pd.DataFrame: A DataFrame containing future predictions with dates, seconds, cumulative seconds, cumulative minutes, and cumulative hours.
+        pd.DataFrame: A DataFrame containing future predictions with dates, seconds,
+                      cumulative seconds, cumulative minutes, and cumulative hours.
+
     """
     if len(df) == 0:
         return pd.DataFrame()
@@ -160,7 +168,7 @@ def generate_future_predictions(
 
     # Generate enough days to reach target
     future_dates = pd.date_range(
-        start=last_date + timedelta(days=1), periods=days_needed, freq="D"
+        start=last_date + timedelta(days=1), periods=days_needed, freq="D",
     )
 
     future_seconds = pd.Series([avg_seconds_per_day] * len(future_dates))
@@ -183,10 +191,8 @@ def generate_future_predictions(
             "cumulative_seconds": [last_cumulative_seconds],
             "cumulative_minutes": [last_cumulative_seconds / 60],
             "cumulative_hours": [last_cumulative_seconds / 3600],
-        }
+        },
     )
 
     # Combine last historical point with future predictions
-    combined_df = pd.concat([last_point, future_df], ignore_index=True)
-
-    return combined_df
+    return pd.concat([last_point, future_df], ignore_index=True)
