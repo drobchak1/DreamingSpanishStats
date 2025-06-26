@@ -154,7 +154,8 @@ with st.container(border=True):
                 f"including {initial_time / 60:.0f} min initial time",
             )
         else:
-            st.metric("Total Hours Watched", f"{df['cumulative_hours'].iloc[-1]:.1f}")
+            st.metric("Total Hours Watched",
+                      f"{df['cumulative_hours'].iloc[-1]:.1f}")
     with col2:
         st.metric("Average Minutes/Day", f"{(avg_seconds_per_day / 60):.1f}")
     with col3:
@@ -169,7 +170,8 @@ with st.container(border=True):
     current_hours = df["cumulative_hours"].iloc[-1]
     upcoming_milestones = [m for m in MILESTONES if m > current_hours][:3]
     target_milestone = (
-        upcoming_milestones[2] if len(upcoming_milestones) >= 3 else MILESTONES[-1]
+        upcoming_milestones[2] if len(
+            upcoming_milestones) >= 3 else MILESTONES[-1]
     )
 
     # Calculate current moving averages for predictions
@@ -240,7 +242,8 @@ with st.container(border=True):
     for milestone in MILESTONES:
         color = COLOUR_PALETTE[str(milestone)]
         if milestone <= df["cumulative_hours"].max():
-            milestone_date = df[df["cumulative_hours"] >= milestone]["date"].iloc[0]
+            milestone_date = df[df["cumulative_hours"]
+                                >= milestone]["date"].iloc[0]
         elif milestone <= predicted_df["cumulative_hours"].max():
             milestone_date = predicted_df[
                 predicted_df["cumulative_hours"] >= milestone
@@ -284,12 +287,14 @@ with st.container(border=True):
     current_hours = df["cumulative_hours"].iloc[-1]
     upcoming_milestones = [m for m in MILESTONES if m > current_hours][:3]
     y_axis_max = (
-        upcoming_milestones[2] if len(upcoming_milestones) >= 3 else MILESTONES[-1]
+        upcoming_milestones[2] if len(
+            upcoming_milestones) >= 3 else MILESTONES[-1]
     )
 
     # Get the date for the third upcoming milestone (or last milestone if less than 3 remain)
     if len(upcoming_milestones) > 0:
-        target_milestone = upcoming_milestones[min(2, len(upcoming_milestones) - 1)]
+        target_milestone = upcoming_milestones[min(
+            2, len(upcoming_milestones) - 1)]
         milestone_data = predicted_df[
             predicted_df["cumulative_hours"] >= target_milestone
         ]
@@ -319,8 +324,8 @@ with st.container(border=True):
 
 with st.container(border=True):
     st.subheader("Additional Graphs")
-    # Create tabs for different visualizations
-    tab1, tab2, tab3 = st.tabs(["Daily Breakdown", "Moving Averages", "Yearly Heatmap"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Daily Breakdown", "Moving Averages", "Yearly Heatmap", "Days of Week"])
 
     with tab1:
         # Daily breakdown
@@ -349,7 +354,8 @@ with st.container(border=True):
             yaxis_title="Minutes",
         )
 
-        daily_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
+        daily_fig.update_yaxes(
+            dtick=15, title="Minutes Watched", ticklabelstep=2)
         st.plotly_chart(daily_fig, use_container_width=True)
 
     with tab2:
@@ -362,7 +368,7 @@ with st.container(border=True):
         moving_avg_fig.add_trace(
             go.Scatter(
                 x=df["date"],
-                y=df["seconds"] / 60,  # Convert to minutes
+                y=df["seconds"] / 60,
                 name="Daily Minutes",
                 mode="markers",
                 marker=dict(size=6),
@@ -372,7 +378,7 @@ with st.container(border=True):
         moving_avg_fig.add_trace(
             go.Scatter(
                 x=df["date"],
-                y=df["7day_avg"] / 60,  # Convert to minutes
+                y=df["7day_avg"] / 60,
                 name="7-day Average",
                 line=dict(color=COLOUR_PALETTE["7day_avg"]),
             )
@@ -381,7 +387,7 @@ with st.container(border=True):
         moving_avg_fig.add_trace(
             go.Scatter(
                 x=df["date"],
-                y=df["30day_avg"] / 60,  # Convert to minutes
+                y=df["30day_avg"] / 60,
                 name="30-day Average",
                 line=dict(color=COLOUR_PALETTE["30day_avg"]),
             )
@@ -403,7 +409,8 @@ with st.container(border=True):
             height=400,
         )
 
-        moving_avg_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
+        moving_avg_fig.update_yaxes(
+            dtick=15, title="Minutes Watched", ticklabelstep=2)
 
         st.plotly_chart(moving_avg_fig, use_container_width=True)
 
@@ -418,7 +425,6 @@ with st.container(border=True):
         full_year_df = pd.DataFrame({"date": all_dates})
         full_year_df["seconds"] = 0
 
-        # Merge with actual data
         full_year_df = full_year_df.merge(
             df[["date", "seconds"]], on="date", how="left"
         )
@@ -431,9 +437,11 @@ with st.container(border=True):
         # Handle week numbers correctly
         full_year_df["week"] = isocalendar_df["week"]
         # Adjust week numbers for consistency
-        mask = (full_year_df["date"].dt.month == 12) & (full_year_df["week"] <= 1)
+        mask = (full_year_df["date"].dt.month == 12) & (
+            full_year_df["week"] <= 1)
         full_year_df.loc[mask, "week"] = full_year_df.loc[mask, "week"] + 52
-        mask = (full_year_df["date"].dt.month == 1) & (full_year_df["week"] >= 52)
+        mask = (full_year_df["date"].dt.month == 1) & (
+            full_year_df["week"] >= 52)
         full_year_df.loc[mask, "week"] = full_year_df.loc[mask, "week"] - 52
 
         # Rest of the heatmap code remains the same
@@ -484,6 +492,41 @@ with st.container(border=True):
 
         st.plotly_chart(heatmap_fig, use_container_width=True)
 
+    with tab4:
+        # Days of week breakdown
+        df["day_of_week"] = df["date"].dt.day_name()
+        daily_avg_df = (
+            df.groupby("day_of_week")["seconds"]
+            .mean()
+            .reindex(
+                [
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                    "Sunday",
+                ]
+            )
+            .reset_index()
+        )
+        daily_avg_df["minutes"] = daily_avg_df["seconds"] / 60
+
+        days_of_week_fig = px.bar(
+            daily_avg_df,
+            x="day_of_week",
+            y="minutes",
+            title="Average Minutes Watched per Day of Week",
+            labels={"day_of_week": "Day of Week",
+                    "minutes": "Average Minutes Watched"},
+            color_discrete_sequence=[COLOUR_PALETTE["primary"]],
+        )
+
+        days_of_week_fig.update_layout(
+            xaxis_title="Day of Week", yaxis_title="Minutes")
+        st.plotly_chart(days_of_week_fig, use_container_width=True)
+
 with st.container(border=True):
     # Text predictions
     current_hours = df["cumulative_hours"].iloc[-1]
@@ -518,7 +561,8 @@ with st.container(border=True):
                     else float("inf")
                 )
 
-                predicted_date = df["date"].iloc[-1] + timedelta(days=days_to_milestone)
+                predicted_date = df["date"].iloc[-1] + \
+                    timedelta(days=days_to_milestone)
                 predicted_date_7day = df["date"].iloc[-1] + timedelta(
                     days=days_to_milestone_7day
                 )
@@ -593,7 +637,8 @@ with st.container(border=True):
     with col3:
         # Time comparisons
         last_7_total = df.tail(7)["seconds"].sum()
-        previous_7_total = df.iloc[-14:-7]["seconds"].sum() if len(df) >= 14 else 0
+        previous_7_total = df.iloc[-14:-
+                                   7]["seconds"].sum() if len(df) >= 14 else 0
         week_change = last_7_total - previous_7_total
         st.metric(
             "Last 7 Days Total",
@@ -611,7 +656,8 @@ with st.container(border=True):
     with col4:
         # Achievement metrics
         total_time = df["seconds"].sum()
-        milestone_count = sum(m <= df["cumulative_hours"].iloc[-1] for m in MILESTONES)
+        milestone_count = sum(
+            m <= df["cumulative_hours"].iloc[-1] for m in MILESTONES)
         st.metric(
             "Total Time",
             f"{(total_time / 60):.0f} min",
@@ -635,7 +681,6 @@ with st.container(border=True):
         mime="text/csv",
     )
 
-# Add date range for context
 st.caption(
     f"Data range: {df['date'].min().strftime('%Y-%m-%d')} to {
         df['date'].max().strftime('%Y-%m-%d')
