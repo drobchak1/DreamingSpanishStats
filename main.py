@@ -649,17 +649,17 @@ with st.container(border=True):
                 with cols[1]:
                     st.write(
                         f"{predicted_date.strftime('%Y-%m-%d')} "
-                        "({days_to_milestone:.0f}d)",
+                        f"({days_to_milestone:.0f}d)",
                     )
                 with cols[2]:
                     st.write(
                         f"{predicted_date_7day.strftime('%Y-%m-%d')} "
-                        "({days_to_milestone_7day:.0f}d)",
+                        f"({days_to_milestone_7day:.0f}d)",
                     )
                 with cols[3]:
                     st.write(
                         f"{predicted_date_30day.strftime('%Y-%m-%d')} "
-                        "({days_to_milestone_30day:.0f}d)",
+                        f"({days_to_milestone_30day:.0f}d)",
                     )
             else:
                 cols = st.columns([2, 9])
