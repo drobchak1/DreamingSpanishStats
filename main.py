@@ -1,5 +1,4 @@
-"""
-A Streamlit dashboard application for tracking and visualizing Dreaming Spanish learning progress.
+"""Streamlit dashboard app for tracking and visualizing Dreaming Spanish progress.
 
 This application provides an interactive interface to:
 - Load and display viewing data from the Dreaming Spanish API
@@ -10,7 +9,8 @@ This application provides an interactive interface to:
 - Export viewing data to CSV format
 """
 
-from datetime import timedelta, date
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -20,9 +20,9 @@ import streamlit as st
 from src.utils import generate_future_predictions, get_initial_time, load_data
 
 # Set pandas option for future compatibility
-pd.set_option("future.no_silent_downcasting", True)
+pd.set_option("future.no_silent_downcasting", True)  # noqa: FBT003
 
-
+UPCOMING_MILESTONES_CAP = 3
 MILESTONES = [50, 150, 300, 600, 1000, 1500]
 COLOUR_PALETTE = {
     "primary": "#2E86C1",  # Primary blue
@@ -42,7 +42,8 @@ st.set_page_config(page_title="Dreaming Spanish Time Tracker", layout="wide")
 st.title("Dreaming Spanish Time Tracker")
 st.subheader("Analyze your viewing habits and predict your progress")
 st.info(
-    "This tool is new and may contain bugs and slight statistical errors for the time being. Please report any issues on the GitHub repository. Thank you!"
+    "This tool is new and may contain bugs and slight statistical errors for the time "
+    "being. Please report any issues on the GitHub repository. Thank you!",
 )
 
 button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
@@ -84,7 +85,7 @@ if not token:
     st.warning("Please enter your bearer token above to fetch data")
     # Load and display README
     try:
-        with open("bearer_how_to.md", "r") as file:
+        with Path("bearer_how_to.md").open() as file:
             readme_content = file.read()
             if readme_content:
                 st.markdown(readme_content, unsafe_allow_html=True)
@@ -98,7 +99,9 @@ if "data" not in st.session_state or go_button:
         data = load_data(token)
         if data is None:
             st.error(
-                "Failed to fetch data from the DreamingSpanish API. Please check your bearer token, ensuring it doesn't contain anything extra such as 'token:' at the beginning."
+                "Failed to fetch data from the DreamingSpanish API."
+                "Please check your bearer token, ensuring it doesn't contain "
+                "anything extra such as 'token:' at the beginning.",
             )
             st.stop()
         st.session_state.data = data
@@ -147,8 +150,7 @@ with st.container(border=True):
                 f"including {initial_time / 60:.0f} min initial time",
             )
         else:
-            st.metric("Total Hours Watched",
-                      f"{df['cumulative_hours'].iloc[-1]:.1f}")
+            st.metric("Total Hours Watched", f"{df['cumulative_hours'].iloc[-1]:.1f}")
     with col2:
         st.metric("Average Minutes/Day", f"{(avg_seconds_per_day / 60):.1f}")
     with col3:
@@ -163,8 +165,9 @@ with st.container(border=True):
     current_hours = df["cumulative_hours"].iloc[-1]
     upcoming_milestones = [m for m in MILESTONES if m > current_hours][:3]
     target_milestone = (
-        upcoming_milestones[2] if len(
-            upcoming_milestones) >= 3 else MILESTONES[-1]
+        upcoming_milestones[2]
+        if len(upcoming_milestones) >= UPCOMING_MILESTONES_CAP
+        else MILESTONES[-1]
     )
 
     # Calculate current moving averages for predictions
@@ -173,13 +176,19 @@ with st.container(border=True):
 
     # Generate predictions up to target milestone
     predicted_df = generate_future_predictions(
-        df, avg_seconds_per_day, target_milestone
+        df,
+        avg_seconds_per_day,
+        target_milestone,
     )
     predicted_df_7day = generate_future_predictions(
-        df, current_7day_avg, target_milestone
+        df,
+        current_7day_avg,
+        target_milestone,
     )
     predicted_df_30day = generate_future_predictions(
-        df, current_30day_avg, target_milestone
+        df,
+        current_30day_avg,
+        target_milestone,
     )
 
     # Create milestone prediction visualization
@@ -191,9 +200,9 @@ with st.container(border=True):
             x=df["date"],
             y=df["cumulative_hours"],
             name="Historical Data",
-            line=dict(color=COLOUR_PALETTE["primary"]),
+            line={"color": COLOUR_PALETTE["primary"]},
             mode="lines+markers",
-        )
+        ),
     )
 
     # Add predicted data - Overall Average
@@ -202,10 +211,10 @@ with st.container(border=True):
             x=predicted_df["date"],
             y=predicted_df["cumulative_hours"],
             name="Predicted (Overall Avg)",
-            line=dict(color=f"{COLOUR_PALETTE['primary']}", dash="dash"),
+            line={"color": f"{COLOUR_PALETTE['primary']}", "dash": "dash"},
             mode="lines",
             opacity=0.5,
-        )
+        ),
     )
 
     # Add predicted data - 7-Day Average
@@ -214,10 +223,10 @@ with st.container(border=True):
             x=predicted_df_7day["date"],
             y=predicted_df_7day["cumulative_hours"],
             name="Predicted (7-Day Avg)",
-            line=dict(color=COLOUR_PALETTE["7day_avg"], dash="dot"),
+            line={"color": COLOUR_PALETTE["7day_avg"], "dash": "dot"},
             mode="lines",
             opacity=0.5,
-        )
+        ),
     )
 
     # Add predicted data - 30-Day Average
@@ -226,17 +235,16 @@ with st.container(border=True):
             x=predicted_df_30day["date"],
             y=predicted_df_30day["cumulative_hours"],
             name="Predicted (30-Day Avg)",
-            line=dict(color=COLOUR_PALETTE["30day_avg"], dash="dot"),
+            line={"color": COLOUR_PALETTE["30day_avg"], "dash": "dot"},
             mode="lines",
             opacity=0.5,
-        )
+        ),
     )
 
     for milestone in MILESTONES:
         color = COLOUR_PALETTE[str(milestone)]
         if milestone <= df["cumulative_hours"].max():
-            milestone_date = df[df["cumulative_hours"]
-                                >= milestone]["date"].iloc[0]
+            milestone_date = df[df["cumulative_hours"] >= milestone]["date"].iloc[0]
         elif milestone <= predicted_df["cumulative_hours"].max():
             milestone_date = predicted_df[
                 predicted_df["cumulative_hours"] >= milestone
@@ -250,7 +258,7 @@ with st.container(border=True):
             x1=milestone_date,
             y0=milestone,
             y1=milestone,
-            line=dict(color=color, dash="dash", width=1),
+            line={"color": color, "dash": "dash", "width": 1},
         )
 
         fig_prediction.add_annotation(
@@ -260,7 +268,7 @@ with st.container(border=True):
             showarrow=False,
             xshift=-5,
             xanchor="right",
-            font=dict(color=color),
+            font={"color": color},
         )
 
         fig_prediction.add_annotation(
@@ -271,7 +279,7 @@ with st.container(border=True):
             arrowhead=2,
             arrowsize=1,
             arrowcolor=color,
-            font=dict(color=color, size=10),
+            font={"color": color, "size": 10},
             xanchor="left",
             yanchor="bottom",
         )
@@ -280,14 +288,14 @@ with st.container(border=True):
     current_hours = df["cumulative_hours"].iloc[-1]
     upcoming_milestones = [m for m in MILESTONES if m > current_hours][:3]
     y_axis_max = (
-        upcoming_milestones[2] if len(
-            upcoming_milestones) >= 3 else MILESTONES[-1]
+        upcoming_milestones[2]
+        if len(upcoming_milestones) >= UPCOMING_MILESTONES_CAP
+        else MILESTONES[-1]
     )
 
-    # Get the date for the third upcoming milestone (or last milestone if less than 3 remain)
+    # Get the date for the third upcoming milestone (or last milestone if < 3 remain)
     if len(upcoming_milestones) > 0:
-        target_milestone = upcoming_milestones[min(
-            2, len(upcoming_milestones) - 1)]
+        target_milestone = upcoming_milestones[min(2, len(upcoming_milestones) - 1)]
         milestone_data = predicted_df[
             predicted_df["cumulative_hours"] >= target_milestone
         ]
@@ -299,18 +307,17 @@ with st.container(border=True):
         x_axis_max_date = predicted_df["date"].max()
 
     fig_prediction.update_layout(
-        # title='Projected Growth and Milestones',
         xaxis_title="Date",
         yaxis_title="Cumulative Hours",
         showlegend=True,
         height=600,
-        margin=dict(l=20, r=20, t=10, b=0),
-        yaxis=dict(
-            autorange=True,
-        ),
-        xaxis=dict(
-            autorange=True,
-        ),
+        margin={"l": 20, "r": 20, "t": 10, "b": 0},
+        yaxis={
+            "autorange": True,
+        },
+        xaxis={
+            "autorange": True,
+        },
     )
 
     st.plotly_chart(fig_prediction, use_container_width=True)
@@ -318,7 +325,14 @@ with st.container(border=True):
 with st.container(border=True):
     st.subheader("Additional Graphs")
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["Daily Breakdown", "Moving Averages", "Yearly Heatmap", "Monthly Breakdown", "Days of Week"])
+        [
+            "Daily Breakdown",
+            "Moving Averages",
+            "Yearly Heatmap",
+            "Monthly Breakdown",
+            "Days of Week",
+        ],
+    )
 
     with tab1:
         # Daily breakdown
@@ -329,7 +343,7 @@ with st.container(border=True):
                 x=df["date"],
                 y=df["seconds"] / 60,  # Convert to minutes
                 name="Daily Minutes",
-            )
+            ),
         )
 
         daily_fig.add_trace(
@@ -337,8 +351,8 @@ with st.container(border=True):
                 x=df["date"],
                 y=[avg_seconds_per_day / 60] * len(df),  # Convert to minutes
                 name="Overall Average",
-                line=dict(color=COLOUR_PALETTE["primary"], dash="dash"),
-            )
+                line={"color": COLOUR_PALETTE["primary"], "dash": "dash"},
+            ),
         )
 
         daily_fig.update_layout(
@@ -347,8 +361,7 @@ with st.container(border=True):
             yaxis_title="Minutes",
         )
 
-        daily_fig.update_yaxes(
-            dtick=15, title="Minutes Watched", ticklabelstep=2)
+        daily_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
         st.plotly_chart(daily_fig, use_container_width=True)
 
     with tab2:
@@ -364,8 +377,8 @@ with st.container(border=True):
                 y=df["seconds"] / 60,
                 name="Daily Minutes",
                 mode="markers",
-                marker=dict(size=6),
-            )
+                marker={"size": 6},
+            ),
         )
 
         moving_avg_fig.add_trace(
@@ -373,8 +386,8 @@ with st.container(border=True):
                 x=df["date"],
                 y=df["7day_avg"] / 60,
                 name="7-day Average",
-                line=dict(color=COLOUR_PALETTE["7day_avg"]),
-            )
+                line={"color": COLOUR_PALETTE["7day_avg"]},
+            ),
         )
 
         moving_avg_fig.add_trace(
@@ -382,8 +395,8 @@ with st.container(border=True):
                 x=df["date"],
                 y=df["30day_avg"] / 60,
                 name="30-day Average",
-                line=dict(color=COLOUR_PALETTE["30day_avg"]),
-            )
+                line={"color": COLOUR_PALETTE["30day_avg"]},
+            ),
         )
 
         moving_avg_fig.add_trace(
@@ -391,8 +404,8 @@ with st.container(border=True):
                 x=df["date"],
                 y=df["cumulative_avg"] / 60,
                 name="Overall Average",
-                line=dict(color=COLOUR_PALETTE["primary"], dash="dash"),
-            )
+                line={"color": COLOUR_PALETTE["primary"], "dash": "dash"},
+            ),
         )
 
         moving_avg_fig.update_layout(
@@ -402,8 +415,7 @@ with st.container(border=True):
             height=400,
         )
 
-        moving_avg_fig.update_yaxes(
-            dtick=15, title="Minutes Watched", ticklabelstep=2)
+        moving_avg_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
 
         st.plotly_chart(moving_avg_fig, use_container_width=True)
 
@@ -419,7 +431,9 @@ with st.container(border=True):
         full_year_df["seconds"] = 0
 
         full_year_df = full_year_df.merge(
-            df[["date", "seconds"]], on="date", how="left"
+            df[["date", "seconds"]],
+            on="date",
+            how="left",
         )
         full_year_df["seconds"] = full_year_df["seconds_y"].fillna(0)
 
@@ -430,11 +444,9 @@ with st.container(border=True):
         # Handle week numbers correctly
         full_year_df["week"] = isocalendar_df["week"]
         # Adjust week numbers for consistency
-        mask = (full_year_df["date"].dt.month == 12) & (
-            full_year_df["week"] <= 1)
+        mask = (full_year_df["date"].dt.month == 12) & (full_year_df["week"] <= 1)  # noqa: PLR2004
         full_year_df.loc[mask, "week"] = full_year_df.loc[mask, "week"] + 52
-        mask = (full_year_df["date"].dt.month == 1) & (
-            full_year_df["week"] >= 52)
+        mask = (full_year_df["date"].dt.month == 1) & (full_year_df["week"] >= 52)  # noqa: PLR2004
         full_year_df.loc[mask, "week"] = full_year_df.loc[mask, "week"] - 52
 
         # Rest of the heatmap code remains the same
@@ -452,14 +464,13 @@ with st.container(border=True):
                     [1, "rgb(126,29,103)"],
                 ],
                 showscale=True,
-                colorbar=dict(title="Minutes"),
+                colorbar={"title": "Minutes"},
                 hoverongaps=False,
-                hovertemplate="Date: %{customdata}<br>"
-                + "Minutes: %{z:.1f}<extra></extra>",
+                hovertemplate="Date: %{customdata}<br>Minutes: %{z:.1f}<extra></extra>",
                 customdata=full_year_df["date"].dt.strftime("%Y-%m-%d"),
                 xgap=3,  # Add 3 pixels gap between columns
                 ygap=3,  # Add 3 pixels gap between rows
-            )
+            ),
         )
 
         # Update layout for GitHub-style appearance
@@ -468,17 +479,17 @@ with st.container(border=True):
             xaxis_title="Week",
             yaxis_title="Day of Week",
             height=300,
-            yaxis=dict(
-                ticktext=["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-                tickvals=[0, 1, 2, 3, 4, 5, 6, 7],
-                showgrid=False,
-                autorange="reversed",  # This ensures Mon-Sun order
-            ),
-            xaxis=dict(
-                showgrid=False,
-                dtick=1,  # Show all week numbers
-                range=[0.5, 53.5],  # Fix the range to show all weeks
-            ),
+            yaxis={
+                "ticktext": ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                "tickvals": [0, 1, 2, 3, 4, 5, 6, 7],
+                "showgrid": False,
+                "autorange": "reversed",  # This ensures Mon-Sun order
+            },
+            xaxis={
+                "showgrid": False,
+                "dtick": 1,  # Show all week numbers
+                "range": [0.5, 53.5],  # Fix the range to show all weeks
+            },
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
         )
@@ -489,17 +500,15 @@ with st.container(border=True):
         # Monthly breakdown
         df["month_year"] = df["date"].dt.to_period("M")
 
-        last_12_months = sorted(
-            df["month_year"].unique(), reverse=True)[:12][::-1]
+        last_12_months = sorted(df["month_year"].unique(), reverse=True)[:12][::-1]
 
         monthly_data = []
-        today = date.today()
+        today = datetime.now(tz=UTC).date()
 
         for month_period in last_12_months:
             month_df = df[df["month_year"] == month_period]
 
-            days_practiced = month_df[month_df["seconds"]
-                                      > 0]["date"].nunique()
+            days_practiced = month_df[month_df["seconds"] > 0]["date"].nunique()
             days_target_met = month_df["goalReached"].sum()
 
             if month_period.year == today.year and month_period.month == today.month:
@@ -507,38 +516,46 @@ with st.container(border=True):
             else:
                 days_in_month = month_period.days_in_month
 
-            monthly_data.append({
-                "month": month_period.strftime("%Y-%m"),
-                "days_practiced": days_practiced,
-                "days_target_met": days_target_met,
-                "days_in_month": days_in_month,
-            })
+            monthly_data.append(
+                {
+                    "month": month_period.strftime("%Y-%m"),
+                    "days_practiced": days_practiced,
+                    "days_target_met": days_target_met,
+                    "days_in_month": days_in_month,
+                },
+            )
 
         monthly_df = pd.DataFrame(monthly_data)
 
         # Create grouped bar chart
         monthly_fig = go.Figure()
 
-        monthly_fig.add_trace(go.Bar(
-            x=monthly_df["month"],
-            y=monthly_df["days_target_met"],
-            name="Days Target Met",
-            marker_color=COLOUR_PALETTE["7day_avg"]
-        ))
+        monthly_fig.add_trace(
+            go.Bar(
+                x=monthly_df["month"],
+                y=monthly_df["days_target_met"],
+                name="Days Target Met",
+                marker_color=COLOUR_PALETTE["7day_avg"],
+            ),
+        )
 
-        monthly_fig.add_trace(go.Bar(
-            x=monthly_df["month"],
-            y=monthly_df["days_practiced"],
-            name="Days Practiced (> 0 mins)",
-            marker_color=COLOUR_PALETTE["primary"]
-        ))
+        monthly_fig.add_trace(
+            go.Bar(
+                x=monthly_df["month"],
+                y=monthly_df["days_practiced"],
+                name="Days Practiced (> 0 mins)",
+                marker_color=COLOUR_PALETTE["primary"],
+            ),
+        )
 
-        monthly_fig.add_trace(go.Bar(
-            x=monthly_df["month"],
-            y=monthly_df["days_in_month"],
-            name="Tracked Days in Month",
-            marker_color=COLOUR_PALETTE["30day_avg"]
-        ))
+        monthly_fig.add_trace(
+            go.Bar(
+                x=monthly_df["month"],
+                y=monthly_df["days_in_month"],
+                name="Tracked Days in Month",
+                marker_color=COLOUR_PALETTE["30day_avg"],
+            ),
+        )
 
         monthly_fig.update_layout(
             barmode="group",
@@ -546,13 +563,13 @@ with st.container(border=True):
             xaxis_title="Month",
             yaxis_title="Number of Days",
             height=500,
-            legend_title="Metric"
+            legend_title="Metric",
         )
 
         st.plotly_chart(monthly_fig, use_container_width=True)
 
     with tab5:
-     # Days of week breakdown
+        # Days of week breakdown
         df["day_of_week"] = df["date"].dt.day_name()
         daily_avg_df = (
             df.groupby("day_of_week")["seconds"]
@@ -566,7 +583,7 @@ with st.container(border=True):
                     "Friday",
                     "Saturday",
                     "Sunday",
-                ]
+                ],
             )
             .reset_index()
         )
@@ -577,13 +594,11 @@ with st.container(border=True):
             x="day_of_week",
             y="minutes",
             title="Average Minutes Watched per Day of Week",
-            labels={"day_of_week": "Day of Week",
-                    "minutes": "Average Minutes Watched"},
+            labels={"day_of_week": "Day of Week", "minutes": "Average Minutes Watched"},
             color_discrete_sequence=[COLOUR_PALETTE["primary"]],
         )
 
-        days_of_week_fig.update_layout(
-            xaxis_title="Day of Week", yaxis_title="Minutes")
+        days_of_week_fig.update_layout(xaxis_title="Day of Week", yaxis_title="Minutes")
         st.plotly_chart(days_of_week_fig, use_container_width=True)
 
 with st.container(border=True):
@@ -620,13 +635,12 @@ with st.container(border=True):
                     else float("inf")
                 )
 
-                predicted_date = df["date"].iloc[-1] + \
-                    timedelta(days=days_to_milestone)
+                predicted_date = df["date"].iloc[-1] + timedelta(days=days_to_milestone)
                 predicted_date_7day = df["date"].iloc[-1] + timedelta(
-                    days=days_to_milestone_7day
+                    days=days_to_milestone_7day,
                 )
                 predicted_date_30day = df["date"].iloc[-1] + timedelta(
-                    days=days_to_milestone_30day
+                    days=days_to_milestone_30day,
                 )
 
                 cols = st.columns([2, 3, 3, 3])
@@ -634,15 +648,18 @@ with st.container(border=True):
                     st.write(f"🗓️ {milestone}h")
                 with cols[1]:
                     st.write(
-                        f"{predicted_date.strftime('%Y-%m-%d')} ({days_to_milestone:.0f}d)"
+                        f"{predicted_date.strftime('%Y-%m-%d')} "
+                        "({days_to_milestone:.0f}d)",
                     )
                 with cols[2]:
                     st.write(
-                        f"{predicted_date_7day.strftime('%Y-%m-%d')} ({days_to_milestone_7day:.0f}d)"
+                        f"{predicted_date_7day.strftime('%Y-%m-%d')} "
+                        "({days_to_milestone_7day:.0f}d)",
                     )
                 with cols[3]:
                     st.write(
-                        f"{predicted_date_30day.strftime('%Y-%m-%d')} ({days_to_milestone_30day:.0f}d)"
+                        f"{predicted_date_30day.strftime('%Y-%m-%d')} "
+                        "({days_to_milestone_30day:.0f}d)",
                     )
             else:
                 cols = st.columns([2, 9])
@@ -676,7 +693,9 @@ with st.container(border=True):
         days_watched = (df["seconds"] > 0).sum()
         consistency = (days_watched / len(df)) * 100
         st.metric(
-            "Consistency", f"{consistency:.1f}%", f"{days_watched} of {len(df)} days"
+            "Consistency",
+            f"{consistency:.1f}%",
+            f"{days_watched} of {len(df)} days",
         )
 
     with col2:
@@ -684,7 +703,9 @@ with st.container(border=True):
         st.metric("Current Streak", f"{current_streak} days")
         avg_streak = streak_lengths.mean() if not streak_lengths.empty else 0
         st.metric(
-            "Average Streak", f"{avg_streak:.1f} days", f"Best: {longest_streak} days"
+            "Average Streak",
+            f"{avg_streak:.1f} days",
+            f"Best: {longest_streak} days",
         )
 
         st.metric(
@@ -696,8 +717,7 @@ with st.container(border=True):
     with col3:
         # Time comparisons
         last_7_total = df.tail(7)["seconds"].sum()
-        previous_7_total = df.iloc[-14:-
-                                   7]["seconds"].sum() if len(df) >= 14 else 0
+        previous_7_total = df.iloc[-14:-7]["seconds"].sum() if len(df) >= 14 else 0  # noqa: PLR2004
         week_change = last_7_total - previous_7_total
         st.metric(
             "Last 7 Days Total",
@@ -715,8 +735,7 @@ with st.container(border=True):
     with col4:
         # Achievement metrics
         total_time = df["seconds"].sum()
-        milestone_count = sum(
-            m <= df["cumulative_hours"].iloc[-1] for m in MILESTONES)
+        milestone_count = sum(m <= df["cumulative_hours"].iloc[-1] for m in MILESTONES)
         st.metric(
             "Total Time",
             f"{(total_time / 60):.0f} min",
@@ -726,7 +745,9 @@ with st.container(border=True):
 
         goal_rate = (goals_reached / total_days) * 100
         st.metric(
-            "Goal Achievement", f"{goals_reached} days", f"{goal_rate:.1f}% of days"
+            "Goal Achievement",
+            f"{goals_reached} days",
+            f"{goal_rate:.1f}% of days",
         )
 
 
@@ -743,5 +764,5 @@ with st.container(border=True):
 st.caption(
     f"Data range: {df['date'].min().strftime('%Y-%m-%d')} to {
         df['date'].max().strftime('%Y-%m-%d')
-    }"
+    }",
 )
