@@ -200,24 +200,25 @@ def generate_future_predictions(
 
 
 def get_best_days(analysis_result: AnalysisResult, num_days: int = 5) -> list[dict]:
-    """
-    Identifies and returns the top N days with the most time spent from an AnalysisResult.
+    """Identify and return the top N days with the most time spent.
 
     Args:
-        analysis_result (AnalysisResult): The analysis result object containing the DataFrame.
+        analysis_result (AnalysisResult): The analysis result object.
         num_days (int): The number of top days to retrieve.
 
     Returns:
         list[dict]: A list of dictionaries, each representing a best day
                     with 'date' and 'timeSeconds'.
                     Returns an empty list if not enough data.
+
     """
     if analysis_result.df.empty or len(analysis_result.df) < num_days:
         return []  # Indicate not enough data
 
     # Sort by timeSeconds in descending order and get the top N
     best_days_df = analysis_result.df.sort_values(
-        by="timeSeconds", ascending=False
+        by="timeSeconds",
+        ascending=False,
     ).head(num_days)
 
     # Convert to a list of dictionaries for easier display
@@ -227,6 +228,6 @@ def get_best_days(analysis_result: AnalysisResult, num_days: int = 5) -> list[di
             {
                 "date": row["date"].strftime("%Y-%m-%d"),
                 "timeSeconds": int(row["timeSeconds"]),  # Ensure integer for display
-            }
+            },
         )
     return best_days_list

@@ -19,9 +19,9 @@ import streamlit as st
 
 from src.utils import (
     generate_future_predictions,
+    get_best_days,
     get_initial_time,
     load_data,
-    get_best_days,
 )
 
 # Set pandas option for future compatibility
