@@ -112,15 +112,13 @@ def load_data(token: str) -> AnalysisResult | None:
 
     # Calculate current goal streak
     df["goal_streak_group"] = (~df["goalReached"]).cumsum()
-    df["current_goal_streak"] = df.groupby("goal_streak_group")[
-        "goalReached"].cumsum()
+    df["current_goal_streak"] = df.groupby("goal_streak_group")["goalReached"].cumsum()
     current_goal_streak = (
         df["current_goal_streak"].iloc[-1] if df["goalReached"].iloc[-1] else 0
     )
 
     # Calculate longest goal streak
-    goal_streak_lengths = df[df["goalReached"]
-                             ].groupby("goal_streak_group").size()
+    goal_streak_lengths = df[df["goalReached"]].groupby("goal_streak_group").size()
     longest_goal_streak = (
         goal_streak_lengths.max() if not goal_streak_lengths.empty else 0
     )
@@ -135,7 +133,9 @@ def load_data(token: str) -> AnalysisResult | None:
 
 
 def generate_future_predictions(
-    df: pd.DataFrame, avg_seconds_per_day: float, target_hours: float,
+    df: pd.DataFrame,
+    avg_seconds_per_day: float,
+    target_hours: float,
 ) -> pd.DataFrame:
     """Generate future predictions based on historical data.
 
@@ -168,15 +168,16 @@ def generate_future_predictions(
 
     # Generate enough days to reach target
     future_dates = pd.date_range(
-        start=last_date + timedelta(days=1), periods=days_needed, freq="D",
+        start=last_date + timedelta(days=1),
+        periods=days_needed,
+        freq="D",
     )
 
     future_seconds = pd.Series([avg_seconds_per_day] * len(future_dates))
     future_df = pd.DataFrame({"date": future_dates, "seconds": future_seconds})
 
     # Calculate cumulative values
-    future_df["cumulative_seconds"] = future_seconds.cumsum() + \
-        last_cumulative_seconds
+    future_df["cumulative_seconds"] = future_seconds.cumsum() + last_cumulative_seconds
     future_df["cumulative_minutes"] = future_df["cumulative_seconds"] / 60
     future_df["cumulative_hours"] = future_df["cumulative_minutes"] / 60
 
@@ -196,3 +197,36 @@ def generate_future_predictions(
 
     # Combine last historical point with future predictions
     return pd.concat([last_point, future_df], ignore_index=True)
+
+
+def get_best_days(analysis_result: AnalysisResult, num_days: int = 5) -> list[dict]:
+    """
+    Identifies and returns the top N days with the most time spent from an AnalysisResult.
+
+    Args:
+        analysis_result (AnalysisResult): The analysis result object containing the DataFrame.
+        num_days (int): The number of top days to retrieve.
+
+    Returns:
+        list[dict]: A list of dictionaries, each representing a best day
+                    with 'date' and 'timeSeconds'.
+                    Returns an empty list if not enough data.
+    """
+    if analysis_result.df.empty or len(analysis_result.df) < num_days:
+        return []  # Indicate not enough data
+
+    # Sort by timeSeconds in descending order and get the top N
+    best_days_df = analysis_result.df.sort_values(
+        by="timeSeconds", ascending=False
+    ).head(num_days)
+
+    # Convert to a list of dictionaries for easier display
+    best_days_list = []
+    for _, row in best_days_df.iterrows():
+        best_days_list.append(
+            {
+                "date": row["date"].strftime("%Y-%m-%d"),
+                "timeSeconds": int(row["timeSeconds"]),  # Ensure integer for display
+            }
+        )
+    return best_days_list

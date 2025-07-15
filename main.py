@@ -17,7 +17,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.utils import generate_future_predictions, get_initial_time, load_data
+from src.utils import (
+    generate_future_predictions,
+    get_initial_time,
+    load_data,
+    get_best_days,
+)
 
 # Set pandas option for future compatibility
 pd.set_option("future.no_silent_downcasting", True)  # noqa: FBT003
@@ -163,6 +168,7 @@ with st.container(border=True):
         st.metric("Current Streak", f"{current_streak} days")
     with col4:
         st.metric("Longest Streak", f"{longest_streak} days")
+
 
 with st.container(border=True):
     st.subheader("Projected Growth")
@@ -682,31 +688,82 @@ with st.container(border=True):
                 st.write(f"Progress to {milestone} hours: {percentage:.1f}%")
                 st.progress(percentage / 100)
 
+general_insights, best_days = st.columns(2)
+with general_insights:  # noqa: SIM117
+    with st.container(border=True):
+        st.subheader("Insights")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            # Best day stats
+            best_day_idx = df["seconds"].idxmax()
+            best_day = df.loc[best_day_idx]
+            st.metric(
+                "Best Day",
+                f"{(best_day['seconds'] / 60):.0f} min",
+                f"{best_day['date'].strftime('%a %b %d')}",
+            )
+            # Add consistency metric
+            days_watched = (df["seconds"] > 0).sum()
+            consistency = (days_watched / len(df)) * 100
+            st.metric(
+                "Consistency",
+                f"{consistency:.1f}%",
+                f"{days_watched} of {len(df)} days",
+            )
+
+        with col2:
+            # Streak information
+            st.metric("Current Streak", f"{current_streak} days")
+
+            st.metric(
+                "Goal Streak",
+                f"{current_goal_streak} days",
+                f"Best: {longest_goal_streak} days",
+            )
+
+        with col3:
+            # Achievement metrics
+            total_time = df["seconds"].sum()
+            milestone_count = sum(
+                m <= df["cumulative_hours"].iloc[-1] for m in MILESTONES
+            )
+            st.metric(
+                "Total Time",
+                f"{(total_time / 60):.0f} min",
+                f"{milestone_count} milestones reached",
+                delta_color="off",
+            )
+
+            goal_rate = (goals_reached / total_days) * 100
+            st.metric(
+                "Goal Achievement",
+                f"{goals_reached} days",
+                f"{goal_rate:.1f}% of days",
+            )
+
+with best_days:  # noqa: SIM117
+    with st.container(border=True):
+        st.subheader("Best Days")
+        best_days = get_best_days(result, num_days=5)
+        if not best_days:
+            st.write("Not enough data to show top 5 days.")
+        else:
+            for day in best_days:
+                hours, remainder = divmod(day["timeSeconds"], 3600)
+                minutes, seconds = divmod(remainder, 60)
+                time_str = (
+                    f"{int(hours):02d} hours {int(minutes):02d} minutes "
+                    f"{int(seconds):02d} seconds"
+                )
+                st.write(f"**{day['date']}**: {time_str}")
+
 with st.container(border=True):
-    st.subheader("Insights")
+    st.subheader("Averaged Insights")
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        # Best day stats
-        best_day_idx = df["seconds"].idxmax()
-        best_day = df.loc[best_day_idx]
-        st.metric(
-            "Best Day",
-            f"{(best_day['seconds'] / 60):.0f} min",
-            f"{best_day['date'].strftime('%a %b %d')}",
-        )
-        # Add consistency metric
-        days_watched = (df["seconds"] > 0).sum()
-        consistency = (days_watched / len(df)) * 100
-        st.metric(
-            "Consistency",
-            f"{consistency:.1f}%",
-            f"{days_watched} of {len(df)} days",
-        )
-
-    with col2:
         # Streak information
-        st.metric("Current Streak", f"{current_streak} days")
         avg_streak = streak_lengths.mean() if not streak_lengths.empty else 0
         st.metric(
             "Average Streak",
@@ -714,13 +771,7 @@ with st.container(border=True):
             f"Best: {longest_streak} days",
         )
 
-        st.metric(
-            "Goal Streak",
-            f"{current_goal_streak} days",
-            f"Best: {longest_goal_streak} days",
-        )
-
-    with col3:
+    with col2:
         # Time comparisons
         last_7_total = df.tail(7)["seconds"].sum()
         previous_7_total = df.iloc[-14:-7]["seconds"].sum() if len(df) >= 14 else 0  # noqa: PLR2004
@@ -731,29 +782,12 @@ with st.container(border=True):
             f"{(week_change / 60):+.0f} min vs previous week",
         )
 
+    with col3:
         weekly_avg = df.tail(7)["seconds"].mean()
         st.metric(
             "7-Day Average",
             f"{(weekly_avg / 60):.1f} min/day",
             f"{((weekly_avg - avg_seconds_per_day) / 60):+.1f} vs overall",
-        )
-
-    with col4:
-        # Achievement metrics
-        total_time = df["seconds"].sum()
-        milestone_count = sum(m <= df["cumulative_hours"].iloc[-1] for m in MILESTONES)
-        st.metric(
-            "Total Time",
-            f"{(total_time / 60):.0f} min",
-            f"{milestone_count} milestones reached",
-            delta_color="off",
-        )
-
-        goal_rate = (goals_reached / total_days) * 100
-        st.metric(
-            "Goal Achievement",
-            f"{goals_reached} days",
-            f"{goal_rate:.1f}% of days",
         )
 
 
