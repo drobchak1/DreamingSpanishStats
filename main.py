@@ -41,7 +41,7 @@ st.set_page_config(page_title="Dreaming Spanish Time Tracker", layout="wide")
 
 title = "Dreaming Spanish Stats"
 if st.context.url.startswith("https://ds-stats-dev."):
-    title = title + " - :yellow[Dev Build]"
+    title = title + " - :orange[Dev Build]"
 elif not st.context.url.startswith("https://ds-stats."):
     title = title + " - :violet[Local Build]"
 st.title(title)
