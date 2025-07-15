@@ -45,17 +45,24 @@ COLOUR_PALETTE = {
 st.set_page_config(page_title="Dreaming Spanish Time Tracker", layout="wide")
 
 title = "Dreaming Spanish Stats"
-if st.context.url.startswith("https://ds-stats-dev."):
-    title = title + " - :orange[Dev Build]"
-elif not st.context.url.startswith("https://ds-stats."):
-    title = title + " - :violet[Local Build]"
-st.title(title)
-st.subheader("Analyze your viewing habits and predict your progress")
-st.info(
-    "This tool is new and may contain bugs and slight statistical errors for the time "
-    "being. Please report any issues on the GitHub repository. Thank you!",
-)
+subheader = "Analyze your viewing habits and predict your progress"
 
+if st.context.url.startswith("https://ds-stats-dev."):
+    title += " - :orange[Dev Build]"
+elif not st.context.url.startswith("https://ds-stats."):
+    title += " - :violet[Local Build]"
+
+st.title(title)
+st.subheader(subheader)
+
+# Show warning for dev build
+if st.context.url.startswith("https://ds-stats-dev."):
+    st.warning(
+        "You are viewing the development version of the application, meaning "
+        "that it may not be fully functional, may contain bugs, or may be "
+        "using experimental features.\n Resort to the production version if "
+        "you encounter any issues.",
+    )
 
 button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
 with button_col1:
