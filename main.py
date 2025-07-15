@@ -39,12 +39,19 @@ COLOUR_PALETTE = {
 
 st.set_page_config(page_title="Dreaming Spanish Time Tracker", layout="wide")
 
-st.title("Dreaming Spanish Time Tracker")
+title = "Dreaming Spanish Stats"
+if hasattr(st.context, "url"):
+    if st.context.url.startswith("ds-stats-dev"):
+        title = title + " - :yellow[Dev Build]"
+else:
+    title = title + " - :violet[Local Build]"
+st.title(title)
 st.subheader("Analyze your viewing habits and predict your progress")
 st.info(
     "This tool is new and may contain bugs and slight statistical errors for the time "
     "being. Please report any issues on the GitHub repository. Thank you!",
 )
+
 
 button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
 with button_col1:
