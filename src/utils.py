@@ -64,6 +64,61 @@ def get_initial_time(token: str) -> int | None:
         return None
 
 
+def fetch_external_times_df(token: str) -> pd.DataFrame | None:
+    """Fetch and normalize external learning time entries."""
+    url = "https://www.dreamingspanish.com/.netlify/functions/externalTime"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        response = httpx.get(url, headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or "externalTimes" not in payload:
+            return None
+        df = pd.DataFrame(payload["externalTimes"])
+        if df.empty:
+            return df
+        # Ensure expected columns and dtypes
+        df["date"] = pd.to_datetime(df["date"])
+        if "timeSeconds" in df.columns:
+            df["timeSeconds"] = pd.to_numeric(df["timeSeconds"], errors="coerce").fillna(0.0)
+        if "description" not in df.columns:
+            df["description"] = ""
+        if "type" not in df.columns:
+            df["type"] = ""
+        return df.sort_values("date")
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Error fetching external times: {e!s}")
+        return None
+
+
+def normalize_description(desc: str) -> str:
+    """Normalize free-text description to group similar sources."""
+    d = (desc or "").lower().strip()
+    if not d:
+        return d
+    if "duo" in d:
+        return "duolingo podcast"
+    if "david" in d:
+        return "david"
+    if d == "slc":
+        return "spanish language coach"
+    return d
+
+
+def format_time(total_hours: float) -> str:
+    """Format a float of hours into 'X hours and Y minutes' (no seconds)."""
+    if not pd.notna(total_hours) or total_hours <= 0:
+        return "0 minutes"
+    hours_part = int(total_hours)
+    minutes_part = round((total_hours - hours_part) * 60)
+    parts = []
+    if hours_part > 0:
+        parts.append(f"{hours_part} hour{'s' if hours_part != 1 else ''}")
+    if minutes_part > 0:
+        parts.append(f"{minutes_part} minute{'s' if minutes_part != 1 else ''}")
+    return " and ".join(parts) if parts else "0 minutes"
+
+
 def load_data(token: str) -> AnalysisResult | None:
     """Load and processes data from the Dreaming Spanish API.
 
@@ -123,12 +178,16 @@ def load_data(token: str) -> AnalysisResult | None:
         goal_streak_lengths.max() if not goal_streak_lengths.empty else 0
     )
 
+    # Fetch external sources data
+    external_df = fetch_external_times_df(token)
+
     return AnalysisResult(
         df=df,
         goals_reached=goals_reached,
         total_days=total_days,
         current_goal_streak=current_goal_streak,
         longest_goal_streak=longest_goal_streak,
+        external_df=external_df,
     )
 
 

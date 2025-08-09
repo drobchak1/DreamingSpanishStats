@@ -22,6 +22,9 @@ from src.utils import (
     get_best_days,
     get_initial_time,
     load_data,
+    fetch_external_times_df,
+    normalize_description,
+    format_time,
 )
 
 # Set pandas option for future compatibility
@@ -47,16 +50,22 @@ st.set_page_config(page_title="Dreaming Spanish Time Tracker", layout="wide")
 title = "Dreaming Spanish Stats"
 subheader = "Analyze your viewing habits and predict your progress"
 
-if st.context.url.startswith("https://ds-stats-dev."):
+# Safely detect environment from URL (fallback to local when unavailable)
+try:
+    current_url = st.context.url  # type: ignore[attr-defined]
+except Exception:
+    current_url = None
+
+if current_url and current_url.startswith("https://ds-stats-dev."):
     title += " - :orange[Dev Build]"
-elif not st.context.url.startswith("https://ds-stats."):
+elif not (current_url and current_url.startswith("https://ds-stats.")):
     title += " - :violet[Local Build]"
 
 st.title(title)
 st.subheader(subheader)
 
 # Show warning for dev build
-if st.context.url.startswith("https://ds-stats-dev."):
+if current_url and current_url.startswith("https://ds-stats-dev."):
     st.warning(
         "You are viewing the development version of the application, meaning "
         "that it may not be fully functional, may contain bugs, or may be "
@@ -619,6 +628,233 @@ with st.container(border=True):
 
         days_of_week_fig.update_layout(xaxis_title="Day of Week", yaxis_title="Minutes")
         st.plotly_chart(days_of_week_fig, use_container_width=True)
+
+with st.container(border=True):
+    st.subheader("Sources")
+
+    # Prefer data fetched during load_data; fall back to direct fetch
+    external_df = getattr(result, "external_df", None)
+    if external_df is None or external_df.empty:
+        external_df = fetch_external_times_df(token) or pd.DataFrame()
+
+    if external_df.empty:
+        st.info("No external sources data found.")
+    else:
+        ext = external_df.copy()
+
+        # Exclude onboarding initial time and blank descriptions for leaderboard rows
+        ext = ext[(ext.get("type", "") != "initial") & ext["description"].fillna("").ne("")]
+        # Normalize and exclude “Dreaming Spanish” self-entries from leaderboard sources
+        ext["norm_desc"] = ext["description"].fillna("").apply(normalize_description)
+        ext = ext[ext["norm_desc"] != "dreaming spanish"]
+
+        # Compute Dreaming Spanish (DS) time from day totals minus external sums (do not filter out DS here)
+        daily_totals = df[["date", "seconds"]].rename(columns={"seconds": "total_seconds"}).set_index("date")
+        ext_calc = external_df.copy()
+        # Sum all external seconds by date (keep everything, including entries described as “Dreaming Spanish”)
+        ext_by_date = (
+            ext_calc.assign(date=pd.to_datetime(ext_calc["date"]))
+            .groupby("date")["timeSeconds"]
+            .sum()
+            .to_frame("ext_seconds")
+        )
+        merged_daily = daily_totals.join(ext_by_date, how="left").fillna({"ext_seconds": 0})
+        merged_daily["ds_seconds"] = (merged_daily["total_seconds"] - merged_daily["ext_seconds"]).clip(lower=0)
+        ds_overall_seconds = float(merged_daily["ds_seconds"].sum())
+        ds_monthly_seconds = merged_daily["ds_seconds"].groupby(merged_daily.index.to_period("M")).sum()
+
+        if ext.empty and ds_overall_seconds == 0:
+            st.info("No external sources after filtering initial time and Dreaming Spanish.")
+        else:
+            ext["month_year"] = ext["date"].dt.to_period("M")
+
+            # Overall leaderboard (external sources)
+            overall = (
+                ext.groupby("norm_desc")
+                .agg(seconds=("timeSeconds", "sum"), sessions=("id", "count"))
+                .reset_index()
+                .sort_values("seconds", ascending=False)
+            )
+            # Append Dreaming Spanish computed time (no sessions)
+            if ds_overall_seconds > 0:
+                ds_row = pd.DataFrame(
+                    {"norm_desc": ["dreaming spanish"], "seconds": [ds_overall_seconds], "sessions": [None]},
+                )
+                overall = pd.concat([overall, ds_row], ignore_index=True)
+                overall = overall.sort_values("seconds", ascending=False)
+
+            # Prepare display columns
+            overall["Source"] = overall["norm_desc"].apply(lambda s: " ".join(w.capitalize() for w in s.split()))
+            overall["Time"] = (overall["seconds"] / 3600).apply(format_time)
+            overall["Sessions"] = overall["sessions"].apply(lambda x: "" if pd.isna(x) else str(int(x))).astype("string")
+            overall = overall.reset_index(drop=True)
+            overall["#"] = range(1, len(overall) + 1)
+            overall_display = overall[["#", "Source", "Time", "Sessions"]]
+
+            # Monthly tabs: include only months that have data (external >0 or DS >0)
+            ext_months = (
+                set(
+                    ext.groupby("month_year")["timeSeconds"]
+                    .sum()
+                    .pipe(lambda s: s[s > 0].index)
+                )
+                if not ext.empty
+                else set()
+            )
+            ds_months = set(ds_monthly_seconds[ds_monthly_seconds > 0].index)
+            months = sorted(list(ext_months.union(ds_months)))  # chronological (oldest -> newest)
+            month_labels = [m.strftime("%b %Y") for m in months]
+
+            # Years list (union of years present in external and DS monthly)
+            # External years with non-zero total seconds
+            ext_years = (
+                set(
+                    ext.groupby(ext["date"].dt.year)["timeSeconds"]
+                    .sum()
+                    .pipe(lambda s: s[s > 0].index)
+                )
+                if not ext.empty
+                else set()
+            )
+            ds_years = set(pd.Index(ds_monthly_seconds[ds_monthly_seconds > 0].index).year)
+            years = sorted(list(ext_years.union(ds_years)))
+
+            # Single tab bar: Overall + Years + Months (no separator)
+            tab_specs: list[tuple[str, object, str]] = [("overall", None, "Overall")]
+            if years:
+                tab_specs += [("year", y, str(y)) for y in years]
+            tab_specs += [("month", m, m.strftime("%b %Y")) for m in months]
+            tabs_combined = st.tabs([label for _, _, label in tab_specs])
+
+            for t_idx, (kind, value, _) in enumerate(tab_specs):
+                with tabs_combined[t_idx]:
+                    if kind == "overall":
+                        st.dataframe(overall_display.set_index("#"), use_container_width=True)
+                    elif kind == "month":
+                        month = value
+                        month_rows = ext[ext["month_year"] == month]
+                        mgrp = (
+                            month_rows.groupby("norm_desc")
+                            .agg(seconds=("timeSeconds", "sum"), sessions=("id", "count"))
+                            .reset_index()
+                        )
+                        ds_month_seconds = float(ds_monthly_seconds.get(month, 0.0))
+                        if ds_month_seconds > 0:
+                            ds_month_row = pd.DataFrame(
+                                {"norm_desc": ["dreaming spanish"], "seconds": [ds_month_seconds], "sessions": [None]},
+                            )
+                            mgrp = pd.concat([mgrp, ds_month_row], ignore_index=True)
+                        if mgrp.empty:
+                            st.write("No data for this month.")
+                        else:
+                            mgrp = mgrp.sort_values("seconds", ascending=False).reset_index(drop=True)
+                            mgrp["Source"] = mgrp["norm_desc"].apply(lambda s: " ".join(w.capitalize() for w in s.split()))
+                            mgrp["Time"] = (mgrp["seconds"] / 3600).apply(format_time)
+                            mgrp["Sessions"] = mgrp["sessions"].apply(lambda x: "" if pd.isna(x) else str(int(x))).astype("string")
+                            mgrp["#"] = range(1, len(mgrp) + 1)
+                            mdisplay = mgrp[["#", "Source", "Time", "Sessions"]]
+                            st.dataframe(mdisplay.set_index("#"), use_container_width=True)
+                    elif kind == "year":
+                        year = int(value)
+                        ydf = ext[ext["date"].dt.year == year]
+                        ygrp = (
+                            ydf.groupby("norm_desc")
+                            .agg(seconds=("timeSeconds", "sum"), sessions=("id", "count"))
+                            .reset_index()
+                        )
+                        ds_year_seconds = float(
+                            ds_monthly_seconds[pd.Index(ds_monthly_seconds.index).year == year].sum(),
+                        )
+                        if ds_year_seconds > 0:
+                            ygrp = pd.concat(
+                                [
+                                    ygrp,
+                                    pd.DataFrame(
+                                        {"norm_desc": ["dreaming spanish"], "seconds": [ds_year_seconds], "sessions": [None]},
+                                    ),
+                                ],
+                                ignore_index=True,
+                            )
+                        if ygrp.empty:
+                            st.write("No data for this year.")
+                        else:
+                            ygrp = ygrp.sort_values("seconds", ascending=False).reset_index(drop=True)
+                            ygrp["Source"] = ygrp["norm_desc"].apply(lambda s: " ".join(w.capitalize() for w in s.split()))
+                            ygrp["Time"] = (ygrp["seconds"] / 3600).apply(format_time)
+                            ygrp["Sessions"] = ygrp["sessions"].apply(lambda x: "" if pd.isna(x) else str(int(x))).astype("string")
+                            ygrp["#"] = range(1, len(ygrp) + 1)
+                            ydisplay = ygrp[["#", "Source", "Time", "Sessions"]]
+                            st.dataframe(ydisplay.set_index("#"), use_container_width=True)
+
+            st.markdown("#### Daily Cumulative Progress (Top 15 Sources)")
+            # Build full daily date range from overall DF span
+            day_min = df["date"].min().normalize()
+            day_max = df["date"].max().normalize()
+            full_days = pd.date_range(day_min, day_max, freq="D")
+
+            # External sources per day per normalized description (exclude DS self-entries already filtered)
+            if ext.empty:
+                ext_pivot = pd.DataFrame(index=full_days)
+            else:
+                ext_day = (
+                    ext.assign(date=ext["date"].dt.normalize())
+                    .groupby(["date", "norm_desc"])["timeSeconds"]
+                    .sum()
+                    .unstack(fill_value=0.0)
+                )
+                ext_pivot = ext_day.reindex(full_days, fill_value=0.0)
+
+            # Dreaming Spanish seconds per day = total - external (computed earlier in merged_daily)
+            ds_series = (
+                merged_daily["ds_seconds"]
+                .reindex(full_days, fill_value=0.0)
+                .rename("dreaming spanish")
+            )
+
+            # Combine into a wide daily matrix (days x sources)
+            daily_sources_wide = ext_pivot.join(ds_series, how="left").fillna(0.0)
+
+            # Compute cumulative seconds per source over days
+            daily_cum_wide = daily_sources_wide.cumsum()
+
+            # Prepare long-form data for plotting
+            daily_cum_long = (
+                daily_cum_wide.reset_index(names="date")
+                .melt(id_vars=["date"], var_name="norm_desc", value_name="cum_seconds")
+            )
+            daily_cum_long["cum_hours"] = daily_cum_long["cum_seconds"] / 3600.0
+            daily_cum_long["Source"] = daily_cum_long["norm_desc"].apply(
+                lambda s: " ".join(w.capitalize() for w in s.split()),
+            )
+
+            # Top 15 sources by total cumulative hours at the end
+            totals = daily_cum_wide.iloc[-1]
+            top_sources = totals.sort_values(ascending=False).head(15).index.tolist()
+            source_order = [" ".join(w.capitalize() for w in s.split()) for s in top_sources]
+
+            chart_df = daily_cum_long[daily_cum_long["norm_desc"].isin(top_sources)].copy()
+            chart_df = chart_df.sort_values(["Source", "date"])
+
+            fig_sources = px.line(
+                chart_df,
+                x="date",
+                y="cum_hours",
+                color="Source",
+                category_orders={"Source": source_order},
+                labels={"date": "Date", "cum_hours": "Cumulative Hours"},
+                markers=False,
+                title=None,
+            )
+            fig_sources.update_traces(line={"width": 3})
+            fig_sources.update_layout(
+                height=450,
+                xaxis_title="Date",
+                yaxis_title="Cumulative Hours",
+                legend_title="Source",
+                margin={"l": 10, "r": 10, "t": 10, "b": 0},
+            )
+            fig_sources.update_yaxes(rangemode="tozero")
+            st.plotly_chart(fig_sources, use_container_width=True)
 
 with st.container(border=True):
     # Text predictions
