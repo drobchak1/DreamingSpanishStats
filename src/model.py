@@ -22,6 +22,8 @@ class AnalysisResult:
                                    reached.
         longest_goal_streak (int): The longest streak of consecutive days with goals
                                    reached.
+        external_df (pd.DataFrame, optional): A DataFrame containing external sources
+                                              data. Defaults to None.
 
     """
 
@@ -30,3 +32,4 @@ class AnalysisResult:
     total_days: int
     current_goal_streak: int
     longest_goal_streak: int
+    external_df: pd.DataFrame | None = None

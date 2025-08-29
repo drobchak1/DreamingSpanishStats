@@ -64,6 +64,61 @@ def get_initial_time(token: str) -> int | None:
         return None
 
 
+def fetch_external_times_df(token: str) -> pd.DataFrame | None:
+    """Fetch and normalize external learning time entries."""
+    url = "https://www.dreamingspanish.com/.netlify/functions/externalTime"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        response = httpx.get(url, headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or "externalTimes" not in payload:
+            return None
+        df = pd.DataFrame(payload["externalTimes"])
+        if df.empty:
+            return df
+        # Ensure expected columns and dtypes
+        df["date"] = pd.to_datetime(df["date"])
+        if "timeSeconds" in df.columns:
+            df["timeSeconds"] = pd.to_numeric(df["timeSeconds"], errors="coerce").fillna(0.0)
+        if "description" not in df.columns:
+            df["description"] = ""
+        if "type" not in df.columns:
+            df["type"] = ""
+        return df.sort_values("date")
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Error fetching external times: {e!s}")
+        return None
+
+
+def normalize_description(desc: str) -> str:
+    """Normalize free-text description to group similar sources."""
+    d = (desc or "").lower().strip()
+    if not d:
+        return d
+    if "duo" in d:
+        return "duolingo podcast"
+    if "david" in d:
+        return "david"
+    if d == "slc":
+        return "spanish language coach"
+    return d
+
+
+def format_time(total_hours: float) -> str:
+    """Format a float of hours into 'X hours and Y minutes' (no seconds)."""
+    if not pd.notna(total_hours) or total_hours <= 0:
+        return "0 minutes"
+    hours_part = int(total_hours)
+    minutes_part = round((total_hours - hours_part) * 60)
+    parts = []
+    if hours_part > 0:
+        parts.append(f"{hours_part} hour{'s' if hours_part != 1 else ''}")
+    if minutes_part > 0:
+        parts.append(f"{minutes_part} minute{'s' if minutes_part != 1 else ''}")
+    return " and ".join(parts) if parts else "0 minutes"
+
+
 def load_data(token: str) -> AnalysisResult | None:
     """Load and processes data from the Dreaming Spanish API.
 
@@ -112,18 +167,19 @@ def load_data(token: str) -> AnalysisResult | None:
 
     # Calculate current goal streak
     df["goal_streak_group"] = (~df["goalReached"]).cumsum()
-    df["current_goal_streak"] = df.groupby("goal_streak_group")[
-        "goalReached"].cumsum()
+    df["current_goal_streak"] = df.groupby("goal_streak_group")["goalReached"].cumsum()
     current_goal_streak = (
         df["current_goal_streak"].iloc[-1] if df["goalReached"].iloc[-1] else 0
     )
 
     # Calculate longest goal streak
-    goal_streak_lengths = df[df["goalReached"]
-                             ].groupby("goal_streak_group").size()
+    goal_streak_lengths = df[df["goalReached"]].groupby("goal_streak_group").size()
     longest_goal_streak = (
         goal_streak_lengths.max() if not goal_streak_lengths.empty else 0
     )
+
+    # Fetch external sources data
+    external_df = fetch_external_times_df(token)
 
     return AnalysisResult(
         df=df,
@@ -131,11 +187,14 @@ def load_data(token: str) -> AnalysisResult | None:
         total_days=total_days,
         current_goal_streak=current_goal_streak,
         longest_goal_streak=longest_goal_streak,
+        external_df=external_df,
     )
 
 
 def generate_future_predictions(
-    df: pd.DataFrame, avg_seconds_per_day: float, target_hours: float,
+    df: pd.DataFrame,
+    avg_seconds_per_day: float,
+    target_hours: float,
 ) -> pd.DataFrame:
     """Generate future predictions based on historical data.
 
@@ -168,15 +227,16 @@ def generate_future_predictions(
 
     # Generate enough days to reach target
     future_dates = pd.date_range(
-        start=last_date + timedelta(days=1), periods=days_needed, freq="D",
+        start=last_date + timedelta(days=1),
+        periods=days_needed,
+        freq="D",
     )
 
     future_seconds = pd.Series([avg_seconds_per_day] * len(future_dates))
     future_df = pd.DataFrame({"date": future_dates, "seconds": future_seconds})
 
     # Calculate cumulative values
-    future_df["cumulative_seconds"] = future_seconds.cumsum() + \
-        last_cumulative_seconds
+    future_df["cumulative_seconds"] = future_seconds.cumsum() + last_cumulative_seconds
     future_df["cumulative_minutes"] = future_df["cumulative_seconds"] / 60
     future_df["cumulative_hours"] = future_df["cumulative_minutes"] / 60
 
@@ -196,3 +256,37 @@ def generate_future_predictions(
 
     # Combine last historical point with future predictions
     return pd.concat([last_point, future_df], ignore_index=True)
+
+
+def get_best_days(analysis_result: AnalysisResult, num_days: int = 5) -> list[dict]:
+    """Identify and return the top N days with the most time spent.
+
+    Args:
+        analysis_result (AnalysisResult): The analysis result object.
+        num_days (int): The number of top days to retrieve.
+
+    Returns:
+        list[dict]: A list of dictionaries, each representing a best day
+                    with 'date' and 'timeSeconds'.
+                    Returns an empty list if not enough data.
+
+    """
+    if analysis_result.df.empty or len(analysis_result.df) < num_days:
+        return []  # Indicate not enough data
+
+    # Sort by timeSeconds in descending order and get the top N
+    best_days_df = analysis_result.df.sort_values(
+        by="timeSeconds",
+        ascending=False,
+    ).head(num_days)
+
+    # Convert to a list of dictionaries for easier display
+    best_days_list = []
+    for _, row in best_days_df.iterrows():
+        best_days_list.append(
+            {
+                "date": row["date"].strftime("%Y-%m-%d"),
+                "timeSeconds": int(row["timeSeconds"]),  # Ensure integer for display
+            },
+        )
+    return best_days_list
