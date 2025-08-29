@@ -95,6 +95,15 @@ with button_col3:
         use_container_width=True,
     )
 
+# Load default token from file (overrideable by input)
+DEFAULT_TOKEN_FILE = Path(r"C:\Users\drobchak\Desktop\Espanol\ds_auth_token.txt")
+default_token = ""
+try:
+    if DEFAULT_TOKEN_FILE.exists():
+        default_token = DEFAULT_TOKEN_FILE.read_text(encoding="utf-8").strip()
+except Exception:
+    default_token = ""
+
 # Add token input and buttons in an aligned row
 st.write("")  # Add some spacing
 col1, col2 = st.columns([4, 1])
@@ -104,6 +113,7 @@ with col1:
         type="password",
         key="token_input",
         label_visibility="collapsed",
+        value=default_token,  # prefill from file by default
     )
 with col2:
     go_button = st.button("Go", type="primary", use_container_width=True)
@@ -354,8 +364,8 @@ with st.container(border=True):
     st.subheader("Additional Graphs")
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
-            "Daily Breakdown",
             "Moving Averages",
+            "Daily Breakdown",
             "Yearly Heatmap",
             "Monthly Breakdown",
             "Days of Week",
@@ -363,6 +373,61 @@ with st.container(border=True):
     )
 
     with tab1:
+        # Moving averages visualization
+        moving_avg_fig = go.Figure()
+
+        # Calculate cumulative average (running mean)
+        df["cumulative_avg"] = df["seconds"].expanding().mean()
+
+        moving_avg_fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["seconds"] / 3600,
+                name="Daily Hours",
+                mode="markers",
+                marker={"size": 6},
+            ),
+        )
+
+        moving_avg_fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["7day_avg"] / 3600,
+                name="7-day Average",
+                line={"color": COLOUR_PALETTE["7day_avg"]},
+            ),
+        )
+
+        moving_avg_fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["30day_avg"] / 3600,
+                name="30-day Average",
+                line={"color": COLOUR_PALETTE["30day_avg"]},
+            ),
+        )
+
+        moving_avg_fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=df["cumulative_avg"] / 3600,
+                name="Overall Average",
+                line={"color": COLOUR_PALETTE["primary"], "dash": "dash"},
+            ),
+        )
+
+        moving_avg_fig.update_layout(
+            title="Daily Hours with Moving Averages",
+            xaxis_title="Date",
+            yaxis_title="Hours",
+            height=450,
+        )
+
+        moving_avg_fig.update_yaxes(title="Hours Watched")
+
+        st.plotly_chart(moving_avg_fig, use_container_width=True)
+
+    with tab2:
         # Daily breakdown
         daily_fig = go.Figure()
 
@@ -387,65 +452,11 @@ with st.container(border=True):
             title="Daily Minutes Watched",
             xaxis_title="Date",
             yaxis_title="Minutes",
+            height=450,
         )
 
         daily_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
         st.plotly_chart(daily_fig, use_container_width=True)
-
-    with tab2:
-        # Moving averages visualization
-        moving_avg_fig = go.Figure()
-
-        # Calculate cumulative average (running mean)
-        df["cumulative_avg"] = df["seconds"].expanding().mean()
-
-        moving_avg_fig.add_trace(
-            go.Scatter(
-                x=df["date"],
-                y=df["seconds"] / 60,
-                name="Daily Minutes",
-                mode="markers",
-                marker={"size": 6},
-            ),
-        )
-
-        moving_avg_fig.add_trace(
-            go.Scatter(
-                x=df["date"],
-                y=df["7day_avg"] / 60,
-                name="7-day Average",
-                line={"color": COLOUR_PALETTE["7day_avg"]},
-            ),
-        )
-
-        moving_avg_fig.add_trace(
-            go.Scatter(
-                x=df["date"],
-                y=df["30day_avg"] / 60,
-                name="30-day Average",
-                line={"color": COLOUR_PALETTE["30day_avg"]},
-            ),
-        )
-
-        moving_avg_fig.add_trace(
-            go.Scatter(
-                x=df["date"],
-                y=df["cumulative_avg"] / 60,
-                name="Overall Average",
-                line={"color": COLOUR_PALETTE["primary"], "dash": "dash"},
-            ),
-        )
-
-        moving_avg_fig.update_layout(
-            title="Daily Minutes with Moving Averages",
-            xaxis_title="Date",
-            yaxis_title="Minutes",
-            height=400,
-        )
-
-        moving_avg_fig.update_yaxes(dtick=15, title="Minutes Watched", ticklabelstep=2)
-
-        st.plotly_chart(moving_avg_fig, use_container_width=True)
 
     with tab3:
         # Create a complete year date range
@@ -590,7 +601,7 @@ with st.container(border=True):
             title="Monthly Breakdown of Practice and Goals",
             xaxis_title="Month",
             yaxis_title="Number of Days",
-            height=500,
+            height=450,
             legend_title="Metric",
         )
 
@@ -626,7 +637,11 @@ with st.container(border=True):
             color_discrete_sequence=[COLOUR_PALETTE["primary"]],
         )
 
-        days_of_week_fig.update_layout(xaxis_title="Day of Week", yaxis_title="Minutes")
+        days_of_week_fig.update_layout(
+            xaxis_title="Day of Week",
+            yaxis_title="Minutes",
+            height=450,
+        )
         st.plotly_chart(days_of_week_fig, use_container_width=True)
 
 with st.container(border=True):
@@ -786,7 +801,7 @@ with st.container(border=True):
                             ydisplay = ygrp[["#", "Source", "Time", "Sessions"]]
                             st.dataframe(ydisplay.set_index("#"), use_container_width=True)
 
-            st.markdown("#### Daily Cumulative Progress (Top 15 Sources)")
+            st.markdown("#### Daily Cumulative Progress (Top 20 Sources)")
             # Build full daily date range from overall DF span
             day_min = df["date"].min().normalize()
             day_max = df["date"].max().normalize()
@@ -827,34 +842,609 @@ with st.container(border=True):
                 lambda s: " ".join(w.capitalize() for w in s.split()),
             )
 
-            # Top 15 sources by total cumulative hours at the end
+            # Top 20 sources by total cumulative hours at the end
             totals = daily_cum_wide.iloc[-1]
-            top_sources = totals.sort_values(ascending=False).head(15).index.tolist()
+            top_sources = totals.sort_values(ascending=False).head(20).index.tolist()
             source_order = [" ".join(w.capitalize() for w in s.split()) for s in top_sources]
 
             chart_df = daily_cum_long[daily_cum_long["norm_desc"].isin(top_sources)].copy()
             chart_df = chart_df.sort_values(["Source", "date"])
 
-            fig_sources = px.line(
-                chart_df,
-                x="date",
-                y="cum_hours",
-                color="Source",
-                category_orders={"Source": source_order},
-                labels={"date": "Date", "cum_hours": "Cumulative Hours"},
-                markers=False,
-                title=None,
+            # Tabs: Cumulative vs 30-day Average
+            tab_src_cum, tab_src_avg = st.tabs(["Cumulative", "30-day Average"])
+
+            with tab_src_cum:
+                fig_sources = px.line(
+                    chart_df,
+                    x="date",
+                    y="cum_hours",
+                    color="Source",
+                    category_orders={"Source": source_order},
+                    labels={"date": "Date", "cum_hours": "Cumulative Hours"},
+                    markers=False,
+                    title=None,
+                )
+                fig_sources.update_traces(line={"width": 3})
+                fig_sources.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Cumulative Hours",
+                    legend_title="Source",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_sources.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_sources, use_container_width=True)
+
+            with tab_src_avg:
+                # 30-day rolling average hours/day per source (top 20 only)
+                hours_wide = daily_sources_wide / 3600.0
+                cols = [c for c in top_sources if c in hours_wide.columns]
+                if cols:
+                    ma30_wide = hours_wide[cols].rolling(30, min_periods=1).mean()
+                    ma30_long = (
+                        ma30_wide.reset_index(names="date")
+                        .melt(id_vars=["date"], var_name="norm_desc", value_name="hours")
+                    )
+                    ma30_long["Source"] = ma30_long["norm_desc"].apply(
+                        lambda s: " ".join(w.capitalize() for w in s.split()),
+                    )
+                    fig_sources_avg = px.line(
+                        ma30_long,
+                        x="date",
+                        y="hours",
+                        color="Source",
+                        category_orders={"Source": source_order},
+                        labels={"date": "Date", "hours": "Avg Hours/Day"},
+                        title=None,
+                    )
+                    fig_sources_avg.update_traces(line={"width": 3})
+                    fig_sources_avg.update_layout(
+                        height=450,
+                        xaxis_title="Date",
+                        yaxis_title="Avg Hours/Day",
+                        legend_title="Source",
+                        margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                    )
+                    fig_sources_avg.update_yaxes(rangemode="tozero")
+                    st.plotly_chart(fig_sources_avg, use_container_width=True)
+                else:
+                    st.write("No data to compute 30-day averages.")
+
+            # Build daily classification from the raw external data (ext_calc) to include talking and all descriptions
+            ext_all = ext_calc.copy()
+            if not ext_all.empty:
+                ext_all["date"] = pd.to_datetime(ext_all["date"]).dt.normalize()
+                ext_all["type"] = ext_all.get("type", "").astype("string").str.lower().fillna("")
+                ext_all["norm_desc"] = ext_all["description"].fillna("").apply(normalize_description)
+            else:
+                ext_all = pd.DataFrame(columns=["date", "type", "norm_desc", "timeSeconds"])
+
+            # Learner content sources list (mirrors count_external_hours.py)
+            LEARNER_CONTENT_SOURCES = {
+                "dreaming spanish", "hoy hablamos", "que pasa",
+                "duolingo podcast", "languatalk", "babbel", "the spanish on the road",
+                "spanish language coach", "erre que ele", "hola spanish", "easy spanish",
+                "handyspanish", "fluent spanish express", "la lengua de babel",
+                "spanish for the camino", "profe de flele", "espanolistos", "charlas hispanas",
+                "andalusian spanish to go", "español con juan", "si comprendo", "español coloquial y tal",
+                "spanish boost", "<old podcasts>", "<old watching>", "dreaming youtube", "español automático",
+            }
+
+            # ========================
+            # Content Type Leaderboard
+            # ========================
+            st.markdown("#### Content Type Leaderboard")
+            tab_specs_ct: list[tuple[str, object, str]] = [("overall", None, "Overall")]
+            if years:
+                tab_specs_ct += [("year", y, str(y)) for y in years]
+            tab_specs_ct += [("month", m, m.strftime("%b %Y")) for m in months]
+            tabs_ct = st.tabs([label for _, _, label in tab_specs_ct])
+
+            def compute_content_type_seconds(df_ext: pd.DataFrame) -> dict[str, float]:
+                if df_ext.empty:
+                    return {"Content for Learners": 0.0, "Native Content": 0.0, "Talking": 0.0}
+                talking_sec = float(df_ext[df_ext["type"] == "talking"]["timeSeconds"].sum())
+                rest = df_ext[df_ext["type"] != "talking"]
+                learner_sec = float(rest[rest["norm_desc"].isin(LEARNER_CONTENT_SOURCES)]["timeSeconds"].sum())
+                native_sec = float(rest[~rest["norm_desc"].isin(LEARNER_CONTENT_SOURCES)]["timeSeconds"].sum())
+                return {"Content for Learners": learner_sec, "Native Content": native_sec, "Talking": talking_sec}
+
+            for t_idx, (kind, value, _) in enumerate(tab_specs_ct):
+                with tabs_ct[t_idx]:
+                    if kind == "overall":
+                        secs = compute_content_type_seconds(ext_all)
+                        secs["Content for Learners"] += ds_overall_seconds
+                    elif kind == "year":
+                        year = int(value)
+                        dfy = ext_all[ext_all["date"].dt.year == year]
+                        secs = compute_content_type_seconds(dfy)
+                        ds_year_seconds = float(
+                            ds_monthly_seconds[pd.Index(ds_monthly_seconds.index).year == year].sum(),
+                        )
+                        secs["Content for Learners"] += ds_year_seconds
+                    else:  # month
+                        mper = value  # pd.Period
+                        dfm = ext_all[ext_all["date"].dt.to_period("M") == mper]
+                        secs = compute_content_type_seconds(dfm)
+                        secs["Content for Learners"] += float(ds_monthly_seconds.get(mper, 0.0))
+
+                    rows = [{"Category": k, "seconds": v} for k, v in secs.items() if v > 0]
+                    if not rows:
+                        st.write("No data for this period.")
+                    else:
+                        dft = pd.DataFrame(rows).sort_values("seconds", ascending=False).reset_index(drop=True)
+                        dft["Time"] = (dft["seconds"] / 3600).apply(format_time)
+                        dft["#"] = range(1, len(dft) + 1)
+                        st.dataframe(dft[["#", "Category", "Time"]].set_index("#"), use_container_width=True)
+
+            # Separate talking first (it bypasses description classification)
+            if not ext_all.empty:
+                talking_by_day = (
+                    ext_all[ext_all["type"] == "talking"]
+                    .groupby("date")["timeSeconds"]
+                    .sum()
+                )
+                rest = ext_all[ext_all["type"] != "talking"]
+                learner_ext_by_day = (
+                    rest[rest["norm_desc"].isin(LEARNER_CONTENT_SOURCES)]
+                    .groupby("date")["timeSeconds"]
+                    .sum()
+                )
+                native_ext_by_day = (
+                    rest[~rest["norm_desc"].isin(LEARNER_CONTENT_SOURCES)]
+                    .groupby("date")["timeSeconds"]
+                    .sum()
+                )
+            else:
+                talking_by_day = pd.Series(dtype="float64")
+                learner_ext_by_day = pd.Series(dtype="float64")
+                native_ext_by_day = pd.Series(dtype="float64")
+
+            # DS is always considered learner content
+            learner_total_by_day = (
+                ds_series.add(learner_ext_by_day, fill_value=0.0)
+                .reindex(full_days, fill_value=0.0)
             )
-            fig_sources.update_traces(line={"width": 3})
-            fig_sources.update_layout(
-                height=450,
-                xaxis_title="Date",
-                yaxis_title="Cumulative Hours",
-                legend_title="Source",
-                margin={"l": 10, "r": 10, "t": 10, "b": 0},
+            native_total_by_day = native_ext_by_day.reindex(full_days, fill_value=0.0)
+            talking_total_by_day = talking_by_day.reindex(full_days, fill_value=0.0)
+
+            st.markdown("#### Daily Cumulative by Content Type")
+            tab_cum, tab_avg = st.tabs(["Cumulative", "30-day Average"])
+
+            with tab_cum:
+                # Cumulative totals
+                cum_df = pd.DataFrame(
+                    {
+                        "date": full_days,
+                        "Content for Learners": learner_total_by_day.cumsum() / 3600.0,
+                        "Native Content": native_total_by_day.cumsum() / 3600.0,
+                        "Talking": talking_total_by_day.cumsum() / 3600.0,
+                    },
+                )
+                cum_long = cum_df.melt(id_vars=["date"], var_name="Category", value_name="cum_hours")
+
+                fig_content = px.line(
+                    cum_long,
+                    x="date",
+                    y="cum_hours",
+                    color="Category",
+                    category_orders={"Category": ["Content for Learners", "Native Content", "Talking"]},
+                    color_discrete_map={
+                        "Content for Learners": COLOUR_PALETTE["primary"],
+                        "Native Content": COLOUR_PALETTE["30day_avg"],
+                        "Talking": COLOUR_PALETTE["7day_avg"],
+                    },
+                    labels={"date": "Date", "cum_hours": "Cumulative Hours"},
+                    title=None,
+                )
+                fig_content.update_traces(line={"width": 3})
+                fig_content.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Cumulative Hours",
+                    legend_title="Category",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_content.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_content, use_container_width=True)
+
+            with tab_avg:
+                # Daily totals in hours, then 30-day rolling averages
+                daily_hours = pd.DataFrame(
+                    {
+                        "date": full_days,
+                        "Content for Learners": learner_total_by_day / 3600.0,
+                        "Native Content": native_total_by_day / 3600.0,
+                        "Talking": talking_total_by_day / 3600.0,
+                    },
+                ).set_index("date")
+
+                ma30 = daily_hours.rolling(30, min_periods=1).mean().reset_index()
+                ma30_long = ma30.melt(id_vars=["date"], var_name="Category", value_name="hours")
+
+                fig_avg = px.line(
+                    ma30_long,
+                    x="date",
+                    y="hours",
+                    color="Category",
+                    category_orders={"Category": ["Content for Learners", "Native Content", "Talking"]},
+                    color_discrete_map={
+                        "Content for Learners": COLOUR_PALETTE["primary"],
+                        "Native Content": COLOUR_PALETTE["30day_avg"],
+                        "Talking": COLOUR_PALETTE["7day_avg"],
+                    },
+                    labels={"date": "Date", "hours": "Avg Hours/Day"},
+                    title=None,
+                )
+                fig_avg.update_traces(line={"width": 3})
+                fig_avg.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Avg Hours/Day",
+                    legend_title="Category",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_avg.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_avg, use_container_width=True)
+
+            # ============================
+            # Spanish Variant Leaderboard
+            # ============================
+            st.markdown("#### Spanish Variant Leaderboard")
+            tab_specs_var: list[tuple[str, object, str]] = [("overall", None, "Overall")]
+            if years:
+                tab_specs_var += [("year", y, str(y)) for y in years]
+            tab_specs_var += [("month", m, m.strftime("%b %Y")) for m in months]
+            tabs_var = st.tabs([label for _, _, label in tab_specs_var])
+
+            LATIN_AMERICA_100_SOURCES = {
+                "duolingo podcast", "babbel", "y tu mamá tambien", "universo curioso de la nasa",
+                "preply con jose", "charlas hispanas", "un mundo inmenso", "hola spanish",
+                "spanish boost", "estetica unisex", "luisito comunica"
+            }
+            LATIN_AMERICA_50_SOURCES = {"easy spanish", "<old podcasts>", "<old watching>"}
+
+            def compute_variant_seconds(df_ext: pd.DataFrame) -> dict[str, float]:
+                if df_ext.empty:
+                    return {"Latin America Spanish": 0.0, "Spanish of Spain": 0.0}
+                la100 = df_ext[df_ext["norm_desc"].isin(LATIN_AMERICA_100_SOURCES)]["timeSeconds"].sum()
+                la50 = df_ext[df_ext["norm_desc"].isin(LATIN_AMERICA_50_SOURCES)]["timeSeconds"].sum()
+                other = df_ext[
+                    (~df_ext["norm_desc"].isin(LATIN_AMERICA_100_SOURCES))
+                    & (~df_ext["norm_desc"].isin(LATIN_AMERICA_50_SOURCES))
+                    & df_ext["norm_desc"].ne("")
+                ]["timeSeconds"].sum()
+                la_ext = float(la100) + float(la50) * 0.5
+                sp_ext = float(other) + float(la50) * 0.5
+                return {"Latin America Spanish": la_ext, "Spanish of Spain": sp_ext}
+
+            for t_idx, (kind, value, _) in enumerate(tab_specs_var):
+                with tabs_var[t_idx]:
+                    if kind == "overall":
+                        secs = compute_variant_seconds(ext_all)
+                        secs["Latin America Spanish"] += ds_overall_seconds * 0.60
+                        secs["Spanish of Spain"] += ds_overall_seconds * 0.40
+                    elif kind == "year":
+                        year = int(value)
+                        dfy = ext_all[ext_all["date"].dt.year == year]
+                        secs = compute_variant_seconds(dfy)
+                        ds_year_seconds = float(ds_monthly_seconds[pd.Index(ds_monthly_seconds.index).year == year].sum())
+                        secs["Latin America Spanish"] += ds_year_seconds * 0.60
+                        secs["Spanish of Spain"] += ds_year_seconds * 0.40
+                    else:
+                        mper = value  # pd.Period
+                        dfm = ext_all[ext_all["date"].dt.to_period("M") == mper]
+                        secs = compute_variant_seconds(dfm)
+                        ds_m = float(ds_monthly_seconds.get(mper, 0.0))
+                        secs["Latin America Spanish"] += ds_m * 0.60
+                        secs["Spanish of Spain"] += ds_m * 0.40
+
+                    rows = [{"Category": k, "seconds": v} for k, v in secs.items() if v > 0]
+                    if not rows:
+                        st.write("No data for this period.")
+                    else:
+                        dft = pd.DataFrame(rows).sort_values("seconds", ascending=False).reset_index(drop=True)
+                        dft["Time"] = (dft["seconds"] / 3600).apply(format_time)
+                        dft["#"] = range(1, len(dft) + 1)
+                        st.dataframe(dft[["#", "Category", "Time"]].set_index("#"), use_container_width=True)
+
+
+            # Daily cumulative by Spanish variant (Latin America vs Spain)
+            st.markdown("#### Daily Cumulative by Spanish Variant")
+            # Variant source sets (same as count_external_hours.py)
+            LATIN_AMERICA_100_SOURCES = {
+                "duolingo podcast", "babbel", "y tu mamá tambien", "universo curioso de la nasa",
+                "preply con jose", "charlas hispanas", "un mundo inmenso", "hola spanish",
+                "spanish boost", "estetica unisex",
+            }
+            LATIN_AMERICA_50_SOURCES = {"easy spanish", "<old podcasts>", "<old watching>"}
+
+            if not ext_all.empty:
+                la100 = ext_all[ext_all["norm_desc"].isin(LATIN_AMERICA_100_SOURCES)]
+                la50 = ext_all[ext_all["norm_desc"].isin(LATIN_AMERICA_50_SOURCES)]
+                other = ext_all[
+                    (~ext_all["norm_desc"].isin(LATIN_AMERICA_100_SOURCES))
+                    & (~ext_all["norm_desc"].isin(LATIN_AMERICA_50_SOURCES))
+                    & ext_all["norm_desc"].ne("")
+                ]
+                la100_by_day = la100.groupby("date")["timeSeconds"].sum()
+                la50_by_day = la50.groupby("date")["timeSeconds"].sum()
+                spain_by_day = other.groupby("date")["timeSeconds"].sum()
+                la_ext_by_day = la100_by_day.add(la50_by_day.mul(0.5), fill_value=0.0)
+                spain_ext_by_day = spain_by_day.add(la50_by_day.mul(0.5), fill_value=0.0)
+            else:
+                la_ext_by_day = pd.Series(dtype="float64")
+                spain_ext_by_day = pd.Series(dtype="float64")
+
+            # Dreaming Spanish split: 60% Latin America, 40% Spain (per count_external_hours.py)
+            la_total_by_day = (
+                ds_series.mul(0.60).add(la_ext_by_day, fill_value=0.0).reindex(full_days, fill_value=0.0)
             )
-            fig_sources.update_yaxes(rangemode="tozero")
-            st.plotly_chart(fig_sources, use_container_width=True)
+            spain_total_by_day = (
+                ds_series.mul(0.40).add(spain_ext_by_day, fill_value=0.0).reindex(full_days, fill_value=0.0)
+            )
+
+            # Tabs: Cumulative vs 30-day Average
+            tab_var_cum, tab_var_avg = st.tabs(["Cumulative", "30-day Average"])
+
+            with tab_var_cum:
+                # Cumulative hours
+                cum_variant_df = pd.DataFrame(
+                    {
+                        "date": full_days,
+                        "Latin America Spanish": la_total_by_day.cumsum() / 3600.0,
+                        "Spanish of Spain": spain_total_by_day.cumsum() / 3600.0,
+                    },
+                )
+                cum_variant_long = cum_variant_df.melt(
+                    id_vars=["date"],
+                    var_name="Variant",
+                    value_name="cum_hours",
+                )
+
+                fig_variant = px.line(
+                    cum_variant_long,
+                    x="date",
+                    y="cum_hours",
+                    color="Variant",
+                    category_orders={"Variant": ["Latin America Spanish", "Spanish of Spain"]},
+                    color_discrete_map={
+                        "Latin America Spanish": COLOUR_PALETTE["7day_avg"],
+                        "Spanish of Spain": COLOUR_PALETTE["30day_avg"],
+                    },
+                    labels={"date": "Date", "cum_hours": "Cumulative Hours"},
+                    title=None,
+                )
+                fig_variant.update_traces(line={"width": 3})
+                fig_variant.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Cumulative Hours",
+                    legend_title="Variant",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_variant.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_variant, use_container_width=True)
+
+            with tab_var_avg:
+                # 30-day rolling average hours/day by variant
+                daily_variant_hours = pd.DataFrame(
+                    {
+                        "date": full_days,
+                        "Latin America Spanish": la_total_by_day / 3600.0,
+                        "Spanish of Spain": spain_total_by_day / 3600.0,
+                    },
+                ).set_index("date")
+                ma30_var = daily_variant_hours.rolling(30, min_periods=1).mean().reset_index()
+                ma30_var_long = ma30_var.melt(id_vars=["date"], var_name="Variant", value_name="hours")
+
+                fig_variant_avg = px.line(
+                    ma30_var_long,
+                    x="date",
+                    y="hours",
+                    color="Variant",
+                    category_orders={"Variant": ["Latin America Spanish", "Spanish of Spain"]},
+                    color_discrete_map={
+                        "Latin America Spanish": COLOUR_PALETTE["7day_avg"],
+                        "Spanish of Spain": COLOUR_PALETTE["30day_avg"],
+                    },
+                    labels={"date": "Date", "hours": "Avg Hours/Day"},
+                    title=None,
+                )
+                fig_variant_avg.update_traces(line={"width": 3})
+                fig_variant_avg.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Avg Hours/Day",
+                    legend_title="Variant",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_variant_avg.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_variant_avg, use_container_width=True)
+
+            # ==========================================
+            # Activity Type Leaderboard (Watch/Listen/Talk)
+            # ==========================================
+            st.markdown("#### Activity Type Leaderboard")
+            tab_specs_act: list[tuple[str, object, str]] = [("overall", None, "Overall")]
+            if years:
+                tab_specs_act += [("year", y, str(y)) for y in years]
+            tab_specs_act += [("month", m, m.strftime("%b %Y")) for m in months]
+            tabs_act = st.tabs([label for _, _, label in tab_specs_act])
+
+            cutoff_date = pd.Timestamp(2025, 4, 30).date()
+
+            def ds_listen_watch_for_month(period_m: pd.Period) -> tuple[float, float]:
+                ds_m = float(ds_monthly_seconds.get(period_m, 0.0))
+                rep_date = period_m.to_timestamp().date()
+                if rep_date > cutoff_date:
+                    return ds_m * 0.80, ds_m * 0.20
+                return ds_m * 0.50, ds_m * 0.50
+
+            def ds_listen_watch_over_year(y: int) -> tuple[float, float]:
+                listen, watch = 0.0, 0.0
+                for mper, val in ds_monthly_seconds.items():
+                    if mper.year == y:
+                        l, w = ds_listen_watch_for_month(mper)
+                        listen += l
+                        watch += w
+                return listen, watch
+
+            def ds_listen_watch_overall() -> tuple[float, float]:
+                listen, watch = 0.0, 0.0
+                for mper, _ in ds_monthly_seconds.items():
+                    l, w = ds_listen_watch_for_month(mper)
+                    listen += l
+                    watch += w
+                return listen, watch
+
+            def compute_activity_seconds(df_ext: pd.DataFrame) -> dict[str, float]:
+                if df_ext.empty:
+                    return {"Watching": 0.0, "Listening": 0.0, "Talking": 0.0}
+                listen_ext = float(df_ext[df_ext["type"] == "listening"]["timeSeconds"].sum())
+                watch_ext = float(df_ext[df_ext["type"] == "watching"]["timeSeconds"].sum())
+                talk_ext = float(df_ext[df_ext["type"] == "talking"]["timeSeconds"].sum())
+                return {"Watching": watch_ext, "Listening": listen_ext, "Talking": talk_ext}
+
+            for t_idx, (kind, value, _) in enumerate(tab_specs_act):
+                with tabs_act[t_idx]:
+                    if kind == "overall":
+                        secs = compute_activity_seconds(ext_all)
+                        ds_l, ds_w = ds_listen_watch_overall()
+                        secs["Listening"] += ds_l
+                        secs["Watching"] += ds_w
+                    elif kind == "year":
+                        year = int(value)
+                        dfy = ext_all[ext_all["date"].dt.year == year]
+                        secs = compute_activity_seconds(dfy)
+                        ds_l, ds_w = ds_listen_watch_over_year(year)
+                        secs["Listening"] += ds_l
+                        secs["Watching"] += ds_w
+                    else:
+                        mper = value  # pd.Period
+                        dfm = ext_all[ext_all["date"].dt.to_period("M") == mper]
+                        secs = compute_activity_seconds(dfm)
+                        ds_l, ds_w = ds_listen_watch_for_month(mper)
+                        secs["Listening"] += ds_l
+                        secs["Watching"] += ds_w
+
+                    rows = [{"Category": k, "seconds": v} for k, v in secs.items() if v > 0]
+                    if not rows:
+                        st.write("No data for this period.")
+                    else:
+                        dft = pd.DataFrame(rows).sort_values("seconds", ascending=False).reset_index(drop=True)
+                        dft["Time"] = (dft["seconds"] / 3600).apply(format_time)
+                        dft["#"] = range(1, len(dft) + 1)
+                        st.dataframe(dft[["#", "Category", "Time"]].set_index("#"), use_container_width=True)
+
+            # Daily cumulative by activity type (Watching, Listening, Talking)
+            st.markdown("#### Daily Cumulative by Activity Type (Watching, Listening, Talking)")
+            # External by type per day
+            if not ext_all.empty:
+                listen_ext_by_day = (
+                    ext_all[ext_all["type"] == "listening"].groupby("date")["timeSeconds"].sum()
+                )
+                watch_ext_by_day = (
+                    ext_all[ext_all["type"] == "watching"].groupby("date")["timeSeconds"].sum()
+                )
+                talk_ext_by_day = (
+                    ext_all[ext_all["type"] == "talking"].groupby("date")["timeSeconds"].sum()
+                )
+            else:
+                listen_ext_by_day = pd.Series(dtype="float64")
+                watch_ext_by_day = pd.Series(dtype="float64")
+                talk_ext_by_day = pd.Series(dtype="float64")
+
+            # Split Dreaming Spanish daily seconds between listening/watching using date-based ratios
+            cutoff = pd.Timestamp(2025, 4, 30)  # up to and including this date: 50/50; after: 80/20
+            ds_daily = ds_series.reindex(full_days, fill_value=0.0)
+            ratio_listen = pd.Series(0.5, index=full_days)
+            ratio_listen[full_days > cutoff] = 0.80
+            ratio_watch = 1.0 - ratio_listen
+            ds_listen_daily = ds_daily * ratio_listen
+            ds_watch_daily = ds_daily * ratio_watch
+
+            # Combine DS with externals (talking is external only)
+            listen_total_by_day = ds_listen_daily.add(listen_ext_by_day, fill_value=0.0).reindex(full_days, fill_value=0.0)
+            watch_total_by_day = ds_watch_daily.add(watch_ext_by_day, fill_value=0.0).reindex(full_days, fill_value=0.0)
+            talking_total_by_day = talk_ext_by_day.reindex(full_days, fill_value=0.0)
+
+            # Tabs: Cumulative vs 30-day Average
+            tab_act_cum, tab_act_avg = st.tabs(["Cumulative", "30-day Average"])
+
+            with tab_act_cum:
+                cum_type_df = pd.DataFrame(
+                    {
+                        "date": full_days,
+                        "Watching": watch_total_by_day.cumsum() / 3600.0,
+                        "Listening": listen_total_by_day.cumsum() / 3600.0,
+                        "Talking": talking_total_by_day.cumsum() / 3600.0,
+                    },
+                )
+                cum_type_long = cum_type_df.melt(id_vars=["date"], var_name="Type", value_name="cum_hours")
+
+                fig_types = px.line(
+                    cum_type_long,
+                    x="date",
+                    y="cum_hours",
+                    color="Type",
+                    category_orders={"Type": ["Watching", "Listening", "Talking"]},
+                    color_discrete_map={
+                        "Watching": COLOUR_PALETTE["primary"],
+                        "Listening": COLOUR_PALETTE["7day_avg"],
+                        "Talking": COLOUR_PALETTE["30day_avg"],
+                    },
+                    labels={"date": "Date", "cum_hours": "Cumulative Hours"},
+                    title=None,
+                )
+                fig_types.update_traces(line={"width": 3})
+                fig_types.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Cumulative Hours",
+                    legend_title="Type",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_types.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_types, use_container_width=True)
+
+            with tab_act_avg:
+                # 30-day rolling average hours/day by activity type
+                daily_type_hours = pd.DataFrame(
+                    {
+                        "date": full_days,
+                        "Watching": watch_total_by_day / 3600.0,
+                        "Listening": listen_total_by_day / 3600.0,
+                        "Talking": talking_total_by_day / 3600.0,
+                    },
+                ).set_index("date")
+                ma30_type = daily_type_hours.rolling(30, min_periods=1).mean().reset_index()
+                ma30_type_long = ma30_type.melt(id_vars=["date"], var_name="Type", value_name="hours")
+
+                fig_types_avg = px.line(
+                    ma30_type_long,
+                    x="date",
+                    y="hours",
+                    color="Type",
+                    category_orders={"Type": ["Watching", "Listening", "Talking"]},
+                    color_discrete_map={
+                        "Watching": COLOUR_PALETTE["primary"],
+                        "Listening": COLOUR_PALETTE["7day_avg"],
+                        "Talking": COLOUR_PALETTE["30day_avg"],
+                    },
+                    labels={"date": "Date", "hours": "Avg Hours/Day"},
+                    title=None,
+                )
+                fig_types_avg.update_traces(line={"width": 3})
+                fig_types_avg.update_layout(
+                    height=450,
+                    xaxis_title="Date",
+                    yaxis_title="Avg Hours/Day",
+                    legend_title="Type",
+                    margin={"l": 10, "r": 10, "t": 10, "b": 0},
+                )
+                fig_types_avg.update_yaxes(rangemode="tozero")
+                st.plotly_chart(fig_types_avg, use_container_width=True)
 
 with st.container(border=True):
     # Text predictions
